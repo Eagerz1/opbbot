@@ -13,7 +13,9 @@
     "deploy": "node --no-warnings src/deploy-commands.js",
     "preview": "node --no-warnings src/preview/server.js",
     "test": "node --test --no-warnings tests/*.test.js",
-    "doctor": "node --no-warnings scripts/doctor.js"
+    "doctor": "node --no-warnings scripts/doctor.js",
+    "show-env": "node scripts/show-env.js",
+    "set-token": "node scripts/set-token.js"
   },
   "license": "MIT",
   "dependencies": {

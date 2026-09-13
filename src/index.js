@@ -46,13 +46,12 @@ if (!token) {
         const note = f.toLowerCase() === '.env.example' ? '  (template — do not edit)' : '';
         console.error(`    ${f}  (${size} bytes)${note}`);
       }
-      console.error('\n  None of them contain a usable bot token.');
-      console.error('  A token line looks like this, all on ONE line:');
-      console.error('\n    DISCORD_TOKEN=MTIzNDU2Nzg5MDEyMzQ1Njc4.GxYzAb.aBcDeF-gHiJkL\n');
-      console.error('  (Capitalisation does not matter — "token=" and "Discord_Token=" work too.');
-      console.error('   What matters is the long value after the "=".)\n');
-      console.error('  Get a fresh one: Discord Developer Portal → your app → Bot → Reset Token.');
-      console.error('  Then run:  npm run doctor\n');
+      console.error('\n  None of them contain a bot token.');
+      console.error('\n  Skip the text editor — paste your token straight in with:');
+      console.error('\n    npm run set-token -- PASTE_YOUR_TOKEN_HERE\n');
+      console.error('  To see exactly what your .env contains right now:');
+      console.error('\n    npm run show-env\n');
+      console.error('  Token comes from: Discord Developer Portal → your app → Bot → Reset Token.\n');
     }
   } catch {
     console.error('\n  Run:  npm run doctor\n');
