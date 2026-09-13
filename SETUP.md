@@ -85,6 +85,14 @@ Now open `.env` in a text editor and paste your values.
 
 > **Opening `.env` on Windows:** it has no filename, just an extension, so double-clicking may not work. In the `opbbot` folder run `notepad .env`, or open it from VS Code.
 
+> ### ⚠️ Two Notepad traps
+>
+> **1. Saving adds `.txt`.** Notepad's Save As defaults to "Text Documents", which turns `.env` into `.env.txt`. Windows *hides* that extension, so the file looks right in Explorer but the bot can't see it. When saving, set **Save as type → All Files**.
+>
+> **2. The encoding menu.** Leave **Encoding** on **UTF-8**. If it's set to "Unicode" (UTF-16), nothing in the file can be read.
+>
+> `npm run doctor` detects and fixes both of these automatically — if you hit them, just run it.
+
 ```ini
 DISCORD_TOKEN=MTIzNDU2Nzg5MDEyMzQ1Njc4.GxYzAb.your-real-token-here
 CLIENT_ID=1234567890123456789
@@ -213,6 +221,7 @@ Your `.env` and `data/` are untouched by `git pull`.
 
 | Symptom | Cause & fix |
 |---|---|
+| **"DISCORD_TOKEN is not set" but I did fill it in** | Run `npm run doctor` — it pinpoints the cause and fixes most of them for you. Usual suspects: the file is really `.env.txt` (Notepad added it, Windows hides it), it was saved as UTF-16, the value ended up on the line *below* `DISCORD_TOKEN=`, the `#` was left at the start of the line, or you're running npm from a different folder. |
 | `'cp' is not recognized...` | `cp` is a Mac/Linux command. On Windows CMD use `copy .env.example .env`, or just run `npm run doctor` and it makes the file for you. |
 | `'https:' is not recognized...` | The whole `git clone ...` line is one command — paste it in one go, don't split it across two lines. |
 | `npm install` fails with `node-gyp` / `MSBuild` errors | Nothing in this project needs compiling. If you see this you have a stale `node_modules` from an older version: delete the `node_modules` folder and `package-lock.json`, then `npm install` again. |

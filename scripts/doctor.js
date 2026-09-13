@@ -7,8 +7,9 @@
  * clear checklist instead of a stack trace.
  */
 import dotenv from 'dotenv';
-import { existsSync, readFileSync, copyFileSync } from 'node:fs';
+import { existsSync, readFileSync, copyFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { diagnoseEnv, inspectKey, adoptStray } from './env-doctor.js';
 
 dotenv.config({ quiet: true });
 
@@ -54,48 +55,121 @@ try {
 }
 
 /* -------------------------------- env ------------------------------- */
-// Be helpful rather than pedantic: if .env is missing but the template is
-// there, just create it. Telling a Windows user to run `cp` is useless.
-if (!existsSync(resolve('.env'))) {
-  if (existsSync(resolve('.env.example'))) {
+// Be helpful rather than pedantic. "TOKEN is not set" is useless when the user
+// swears they set it — find out what actually went wrong.
+const envInfo = diagnoseEnv(process.cwd());
+
+if (!envInfo.exists) {
+  // Did they save it under the wrong name? Notepad loves appending .txt,
+  // and Windows hides the extension so the file *looks* correct.
+  const stray = envInfo.strays[0];
+  if (stray) {
+    if (adoptStray(stray.path)) {
+      warn(`Found "${stray.name}" and renamed it to ".env"`, 'Windows hides file extensions, so Notepad probably saved it as a .txt without telling you. Fixed — re-reading it now.');
+      dotenv.config({ path: resolve('.env'), override: true, quiet: true });
+      Object.assign(envInfo, diagnoseEnv(process.cwd()));
+    } else {
+      bad(`Your settings look like they're in "${stray.name}", not ".env"`, `Rename it to exactly ".env" (no .txt on the end).`);
+    }
+  } else if (existsSync(resolve('.env.example'))) {
     try {
       copyFileSync(resolve('.env.example'), resolve('.env'));
       warn('.env was missing — I created it from .env.example', 'Open .env in a text editor and paste in your DISCORD_TOKEN and CLIENT_ID, then run this again.');
-      // Reload so the checks below see the (still empty) values.
       dotenv.config({ path: resolve('.env'), override: true, quiet: true });
+      Object.assign(envInfo, diagnoseEnv(process.cwd()));
     } catch (err) {
       bad('.env is missing and I could not create it', `${err.message}\n     Copy .env.example to .env by hand.`);
     }
   } else {
-    bad('.env and .env.example are both missing', 'Re-clone the repository — something got deleted.');
+    bad('.env and .env.example are both missing', `Are you in the right folder? You're in:\n     ${process.cwd()}\n     It should be the "opbbot" folder that contains package.json.`);
   }
 } else {
-  ok('.env file found');
+  ok('.env file found', envInfo.envPath);
+
+  // Notepad's "Unicode" option writes UTF-16, which dotenv cannot read at all.
+  // It's unambiguous and safe to repair, so just rewrite it as UTF-8.
+  if (envInfo.encoding?.startsWith('utf16')) {
+    try {
+      writeFileSync(resolve('.env'), envInfo.raw, 'utf8');
+      warn('.env was saved as UTF-16 — I converted it to UTF-8', 'Notepad\'s "Unicode" encoding can\'t be read by the bot. Fixed. (When saving in future, choose UTF-8.)');
+      dotenv.config({ path: resolve('.env'), override: true, quiet: true });
+      Object.assign(envInfo, diagnoseEnv(process.cwd()));
+    } catch (err) {
+      bad(
+        '.env is saved as UTF-16 — none of its values can be read',
+        `In Notepad: File → Save As → set "Encoding" to UTF-8 → overwrite .env.\n     (Could not fix automatically: ${err.message})`,
+      );
+    }
+  }
+
+  // An extra .env.txt lying around usually means they edited the wrong file.
+  for (const stray of envInfo.strays) {
+    warn(`There's also a file called "${stray.name}"`, 'Only ".env" is read. If you edited that one by mistake, copy your values into ".env".');
+  }
 }
 
-const token = process.env.DISCORD_TOKEN?.trim();
-const clientId = process.env.CLIENT_ID?.trim();
+/** Report on one key, using the raw file to explain failures precisely. */
+function checkKey(key, { required, validate, hint, describe }) {
+  const value = process.env[key]?.trim();
+  const detail = envInfo.raw ? inspectKey(envInfo.raw, key) : null;
 
-if (!token || token === 'your_bot_token_here') {
-  bad('DISCORD_TOKEN is not set', 'Discord Developer Portal → your app → Bot → Reset Token');
-} else if (token.split('.').length !== 3) {
-  bad('DISCORD_TOKEN looks malformed', 'A bot token has three dot-separated parts. Did you paste the Client Secret by mistake?');
-} else {
-  ok('DISCORD_TOKEN present', `${token.slice(0, 6)}…${token.slice(-4)}`);
+  // Problems visible in the file itself, even when dotenv did load something
+  // (brackets and smart quotes parse fine but are never a valid value).
+  if (detail && ['commented', 'value-on-next-line', 'placeholder', 'brackets', 'smart-quotes'].includes(detail.status)) {
+    bad(`${key} ${detail.status === 'commented' || detail.status === 'value-on-next-line' ? 'was not loaded' : 'looks wrong'}`, detail.detail);
+    return null;
+  }
+
+  if (!value) {
+    if (detail?.status === 'empty') {
+      bad(`${key} is not set`, `${detail.detail} ${hint ? `\n     ${hint}` : ''}`);
+      return null;
+    }
+    if (detail?.status === 'ok' && envInfo.encoding?.startsWith('utf16')) {
+      return null; // already reported the encoding problem
+    }
+    if (required) bad(`${key} is not set`, hint);
+    else warn(`${key} is empty`, hint);
+    return null;
+  }
+
+  // Loaded, but is it sane?
+  const problem = validate?.(value);
+  if (problem) {
+    bad(`${key} looks wrong`, problem);
+    return null;
+  }
+
+  ok(`${key} present`, describe ? describe(value) : undefined);
+  return value;
 }
 
-if (!clientId || clientId === 'your_application_id_here') {
-  bad('CLIENT_ID is not set', 'Developer Portal → General Information → Application ID');
-} else if (!/^\d{17,20}$/.test(clientId)) {
-  bad('CLIENT_ID should be a 17-20 digit number', `Got: ${clientId}`);
-} else {
-  ok('CLIENT_ID present', clientId);
-}
+const token = checkKey('DISCORD_TOKEN', {
+  required: true,
+  hint: 'Discord Developer Portal → your app → Bot → Reset Token',
+  validate: (v) => {
+    if (v.toLowerCase().startsWith('bot ')) return 'Remove the "Bot " prefix — paste just the token itself.';
+    if (v.split('.').length !== 3) {
+      return `A bot token has three dot-separated parts; yours has ${v.split('.').length}. Did you paste the Client Secret or the Public Key by mistake? Use Bot → Reset Token.`;
+    }
+    return null;
+  },
+  describe: (v) => `${v.slice(0, 6)}…${v.slice(-4)}`,
+});
 
-const guildId = process.env.GUILD_ID?.trim();
-if (!guildId) warn('GUILD_ID is empty', 'Commands will register globally and can take up to 1 hour to appear. Set GUILD_ID for instant testing.');
-else if (!/^\d{17,20}$/.test(guildId)) bad('GUILD_ID should be a 17-20 digit number', `Got: ${guildId}`);
-else ok('GUILD_ID present', guildId);
+const clientId = checkKey('CLIENT_ID', {
+  required: true,
+  hint: 'Developer Portal → General Information → Application ID',
+  validate: (v) => (/^\d{17,20}$/.test(v) ? null : `Should be a 17-20 digit number, but got "${v}". That's the Application ID, not the app name.`),
+  describe: (v) => v,
+});
+
+checkKey('GUILD_ID', {
+  required: false,
+  hint: 'Commands will register globally and can take up to 1 hour to appear. Set GUILD_ID for instant testing. (Discord → Settings → Advanced → Developer Mode, then right-click your server → Copy Server ID.)',
+  validate: (v) => (/^\d{17,20}$/.test(v) ? null : `Should be a 17-20 digit number, but got "${v}".`),
+  describe: (v) => v,
+});
 
 /* ------------------------- live token check ------------------------- */
 if (token && token.split('.').length === 3) {

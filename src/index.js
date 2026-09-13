@@ -9,9 +9,27 @@ import { BRAND } from './config/constants.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const token = process.env.DISCORD_TOKEN;
+const token = process.env.DISCORD_TOKEN?.trim();
 if (!token) {
-  logger.error('DISCORD_TOKEN is missing. Copy .env.example to .env and fill it in.');
+  logger.error('DISCORD_TOKEN is not set.');
+  // Explain *why* rather than just restating it - the usual causes are a
+  // .env saved as .env.txt, saved as UTF-16, or being in the wrong folder.
+  try {
+    const { diagnoseEnv, inspectKey } = await import('../scripts/env-doctor.js');
+    const info = diagnoseEnv(process.cwd());
+    if (!info.exists) {
+      const stray = info.strays[0];
+      if (stray) console.error(`\n  Your settings look like they're in "${stray.name}" instead of ".env".\n  Rename it to exactly ".env", or run:  npm run doctor\n`);
+      else console.error(`\n  No .env file in this folder:\n    ${process.cwd()}\n  Run:  npm run doctor   (it creates the file for you)\n`);
+    } else if (info.encoding?.startsWith('utf16')) {
+      console.error('\n  Your .env is saved as UTF-16, which cannot be read.\n  Run:  npm run doctor   (it converts the file automatically)\n');
+    } else {
+      const d = inspectKey(info.raw ?? '', 'DISCORD_TOKEN');
+      console.error(`\n  ${d.detail ?? 'DISCORD_TOKEN was not found in .env.'}\n  Run:  npm run doctor   for a full check.\n`);
+    }
+  } catch {
+    console.error('\n  Run:  npm run doctor\n');
+  }
   process.exit(1);
 }
 
