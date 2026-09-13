@@ -1,0 +1,23 @@
+{
+  "name": "opb-giveaways",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "OPB Giveaways - Discord bot with server setup, giveaways, Patreon tiers and chat rewards.",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20.10.0"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "deploy": "node src/deploy-commands.js",
+    "preview": "node src/preview/server.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "discord.js": "^14.27.0",
+    "dotenv": "^17.4.2"
+  }
+}

@@ -1,0 +1,21 @@
+node_modules/
+.env
+.env.local
+
+# SQLite database + WAL sidecars
+data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# scratch / local experiments
+.scratch/
+
+logs/
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+coverage/
