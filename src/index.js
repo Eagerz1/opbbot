@@ -46,9 +46,11 @@ if (!token) {
         const note = f.toLowerCase() === '.env.example' ? '  (template — do not edit)' : '';
         console.error(`    ${f}  (${size} bytes)${note}`);
       }
-      console.error('\n  None of them contain a usable DISCORD_TOKEN.');
-      console.error('  The token line must look like this, all on ONE line:');
+      console.error('\n  None of them contain a usable bot token.');
+      console.error('  A token line looks like this, all on ONE line:');
       console.error('\n    DISCORD_TOKEN=MTIzNDU2Nzg5MDEyMzQ1Njc4.GxYzAb.aBcDeF-gHiJkL\n');
+      console.error('  (Capitalisation does not matter — "token=" and "Discord_Token=" work too.');
+      console.error('   What matters is the long value after the "=".)\n');
       console.error('  Get a fresh one: Discord Developer Portal → your app → Bot → Reset Token.');
       console.error('  Then run:  npm run doctor\n');
     }

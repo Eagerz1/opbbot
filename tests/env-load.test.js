@@ -114,7 +114,67 @@ describe('parseEnvText', () => {
   });
 });
 
+describe('key name spelling', () => {
+  test('token key is matched regardless of case or separator', () => {
+    const real = 'MTIzNDU2.GaBcDe.realtoken';
+    for (const k of [
+      'DISCORD_TOKEN',
+      'Discord_token',
+      'discord_token',
+      'DISCORD TOKEN',
+      'discord-token',
+      'discordToken',
+      'DISCORDTOKEN',
+      'TOKEN',
+      'token',
+      'Token',
+      'BOT_TOKEN',
+      'bot token',
+    ]) {
+      assert.equal(parseEnvText(`${k}=${real}\n`).DISCORD_TOKEN, real, `should accept: ${k}`);
+    }
+  });
+
+  test('id keys accept their common aliases', () => {
+    const id = '123456789012345678';
+    for (const k of ['CLIENT_ID', 'Client_id', 'client id', 'APPLICATION_ID', 'app id', 'clientId']) {
+      assert.equal(parseEnvText(`${k}=${id}\n`).CLIENT_ID, id, `should accept: ${k}`);
+    }
+    for (const k of ['GUILD_ID', 'Guild_Id', 'guild-id', 'SERVER_ID', 'server id']) {
+      assert.equal(parseEnvText(`${k}=${id}\n`).GUILD_ID, id, `should accept: ${k}`);
+    }
+  });
+
+  test('export prefix still works with an odd spelling', () => {
+    assert.equal(parseEnvText('export Discord_Token=a.b.c\n').DISCORD_TOKEN, 'a.b.c');
+  });
+
+  test('unrelated keys are left untouched', () => {
+    const r = parseEnvText('SOME_OTHER_THING=hello\n');
+    assert.equal(r.SOME_OTHER_THING, 'hello');
+    assert.equal(r.DISCORD_TOKEN, undefined);
+  });
+});
+
 describe('loadEnv', () => {
+  test('rewrites a misspelled key name in the file', () => {
+    write('.env', 'Discord_token=MTIzNDU2.GaBcDe.realtoken\nClient_id=123456789012345678\n');
+    const r = loadEnv({ dir });
+    assert.equal(process.env.DISCORD_TOKEN, 'MTIzNDU2.GaBcDe.realtoken');
+    assert.equal(process.env.CLIENT_ID, '123456789012345678');
+    const onDisk = readFileSync(join(dir, '.env'), 'utf8');
+    assert.match(onDisk, /^DISCORD_TOKEN=MTIzNDU2\.GaBcDe\.realtoken$/m);
+    assert.match(onDisk, /^CLIENT_ID=123456789012345678$/m);
+    assert.ok(r.repairs.some((m) => m.includes('case-sensitive')));
+  });
+
+  test('does not rewrite a key whose value is still blank', () => {
+    write('.env', 'Discord_token=\n');
+    loadEnv({ dir });
+    const onDisk = readFileSync(join(dir, '.env'), 'utf8');
+    assert.match(onDisk, /Discord_token=/, 'blank line left as-is');
+  });
+
   test('recovers the reported bug: values pasted above the blank template lines', () => {
     write(
       '.env',

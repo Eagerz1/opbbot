@@ -25,6 +25,42 @@ import { resolve, join } from 'node:path';
 const KEYS = ['DISCORD_TOKEN', 'CLIENT_ID', 'GUILD_ID', 'PATREON_URL', 'DATABASE_PATH', 'PORT'];
 
 /**
+ * Names people actually write, mapped to the name the bot reads.
+ *
+ * Env vars are case-sensitive, so `Discord_token=` loads a *different*
+ * variable and the bot sees nothing. Nobody should have to know that, and
+ * "token" / "bot token" are the obvious things to write. Normalisation is
+ * by squashed lowercase, so DISCORD-TOKEN, discord token and discordToken
+ * all land on DISCORD_TOKEN too.
+ */
+const ALIASES = {
+  discordtoken: 'DISCORD_TOKEN',
+  token: 'DISCORD_TOKEN',
+  bottoken: 'DISCORD_TOKEN',
+  discordbottoken: 'DISCORD_TOKEN',
+  secret: 'DISCORD_TOKEN',
+  clientid: 'CLIENT_ID',
+  applicationid: 'CLIENT_ID',
+  appid: 'CLIENT_ID',
+  discordclientid: 'CLIENT_ID',
+  guildid: 'GUILD_ID',
+  serverid: 'GUILD_ID',
+  discordguildid: 'GUILD_ID',
+  patreonurl: 'PATREON_URL',
+  patreon: 'PATREON_URL',
+  databasepath: 'DATABASE_PATH',
+  dbpath: 'DATABASE_PATH',
+  database: 'DATABASE_PATH',
+  port: 'PORT',
+};
+
+/** Map whatever the user typed onto the canonical key name. */
+function canonicalKey(raw) {
+  const squashed = raw.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return ALIASES[squashed] ?? raw;
+}
+
+/**
  * Values that are still the template, not a real secret.
  * Deliberately broad: `your_bot_token_here`, `YOUR TOKEN`, `paste-id-here`,
  * `xxxxx`, `changeme`, `<token>`, `...`
@@ -95,16 +131,17 @@ export function parseEnvText(text) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
 
-    const m = trimmed.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*[=:]\s*(.*)$/);
+    // Key may be written with spaces or hyphens ("DISCORD TOKEN", "discord-token").
+    const m = trimmed.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_ -]*?)\s*[=:]\s*(.*)$/);
     if (!m) continue;
 
-    const key = m[1];
+    const key = canonicalKey(m[1]);
     let value = m[2];
 
     // "KEY=" with the value on the next line
     if (clean(value) === '') {
       const next = (lines[i + 1] ?? '').trim();
-      const nextIsKey = /^(?:export\s+)?[A-Za-z_][A-Za-z0-9_]*\s*[=:]/.test(next);
+      const nextIsKey = /^(?:export\s+)?[A-Za-z_][A-Za-z0-9_ -]*?\s*[=:]/.test(next);
       if (next && !next.startsWith('#') && !nextIsKey) value = next;
     }
 
@@ -273,7 +310,35 @@ export function loadEnv({ dir = process.cwd(), repair = true } = {}) {
     if (KEYS.includes(key)) loaded.push(key);
   }
 
-  // 5. Note duplicate keys that would otherwise have silently won.
+  // 5. Rewrite misspelled key names in the file so it becomes correct on disk
+  //    rather than relying on alias matching at every boot.
+  if (repair && exists) {
+    const renamed = [];
+    let fixedText = text;
+    const lines = fixedText.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(/^(\s*)(?:export\s+)?([A-Za-z_][A-Za-z0-9_ -]*?)\s*([=:])(.*)$/);
+      if (!m) continue;
+      const written = m[2];
+      const canonical = canonicalKey(written);
+      if (canonical !== written && KEYS.includes(canonical) && isUsable(m[4])) {
+        lines[i] = `${m[1]}${canonical}=${m[4].trim()}`;
+        renamed.push(`${written} → ${canonical}`);
+      }
+    }
+    if (renamed.length > 0) {
+      fixedText = lines.join('\n');
+      try {
+        writeFileSync(path, fixedText, 'utf8');
+        text = fixedText;
+        repairs.push(`renamed ${renamed.join(', ')} in .env (these names are case-sensitive)`);
+      } catch {
+        repairs.push(`your .env uses ${renamed.join(', ')} — the names are case-sensitive`);
+      }
+    }
+  }
+
+  // 6. Note duplicate keys that would otherwise have silently won.
   for (const key of KEYS) {
     const assignments = [...text.matchAll(new RegExp(`^\\s*(?:export\\s+)?${key}\\s*[=:](.*)$`, 'gm'))].map((m) => m[1]);
     if (assignments.length > 1 && parsed[key]) {
