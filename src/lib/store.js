@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS giveaways (
 CREATE TABLE IF NOT EXISTS entries (
   giveaway_id TEXT NOT NULL,
   user_id     TEXT NOT NULL,
-  weight      INTEGER NOT NULL DEFAULT 1,
+  weight      REAL NOT NULL DEFAULT 1,
   entered_at  INTEGER NOT NULL,
   PRIMARY KEY (giveaway_id, user_id)
 );
@@ -88,6 +88,28 @@ function columns(table) {
   }
   // Backfill a title for rows created before the column existed.
   db.prepare(`UPDATE giveaways SET title = prize WHERE title IS NULL`).run();
+}
+
+{
+  // Entry weights became fractional (+0.1 .. +0.5 per tier). An older database
+  // declares weight as INTEGER, which silently truncates 1.5 to 1, so rebuild
+  // the table when the column type is still the old one.
+  const info = db.prepare(`PRAGMA table_info(entries)`).all();
+  const weightCol = info.find((c) => c.name === 'weight');
+  if (weightCol && String(weightCol.type).toUpperCase() !== 'REAL') {
+    db.exec(`
+      CREATE TABLE entries_new (
+        giveaway_id TEXT NOT NULL,
+        user_id     TEXT NOT NULL,
+        weight      REAL NOT NULL DEFAULT 1,
+        entered_at  INTEGER NOT NULL,
+        PRIMARY KEY (giveaway_id, user_id)
+      );
+      INSERT INTO entries_new SELECT giveaway_id, user_id, weight, entered_at FROM entries;
+      DROP TABLE entries;
+      ALTER TABLE entries_new RENAME TO entries;
+    `);
+  }
 }
 
 /* --------------------------- guild config --------------------------- */

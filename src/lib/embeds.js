@@ -3,7 +3,8 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { BRAND, COLORS, EMOJI, IDS } from '../config/constants.js';
-import { PATRON_TIERS, CHAT_LEVEL_ROLES } from '../config/blueprint.js';
+import { PATRON_TIERS, CHAT_LEVEL_ROLES, SELF_ROLES } from '../config/blueprint.js';
+import { chunk } from './util.js';
 
 const base = (color = COLORS.primary) => new EmbedBuilder().setColor(color).setFooter({ text: BRAND.footer });
 
@@ -53,7 +54,7 @@ export function faqEmbed(ctx = {}) {
     .setTitle(`${EMOJI.ticket} Frequently Asked Questions`)
     .addFields(
       { name: 'How do I enter a giveaway?', value: `Go to ${chan(ctx.channels?.giveaways)} and press **🎁 Enter**. That's it.` },
-      { name: 'How do I get more entries?', value: 'Two stacking sources: your **Patron tier** (+1 to +8) and your **Chat Level role** (+1 to +8). Max 17 entries.' },
+      { name: 'How do I get more entries?', value: 'Two stacking sources: your **Patron tier** (+0.1 to +0.5) and your **Chat Level role** (+0.1 to +0.5). Everyone starts at 1 entry, so the very best is 2.' },
       { name: 'How do I earn XP?', value: '15–25 XP per message, once a minute, in normal chat channels. Multipliers from patron & chat roles apply.' },
       { name: 'How do I host a giveaway?', value: `You need the ${mention(ctx.roles?.giveawayFunder)} role, then use ${chan(ctx.channels?.createGiveaway)}.` },
       { name: 'I won — what now?', value: 'The bot DMs you and pings you in the giveaway. Reply within **24h** or it gets rerolled.' },
@@ -61,26 +62,55 @@ export function faqEmbed(ctx = {}) {
     );
 }
 
+/**
+ * Self-assignable roles panel, with a real button per role.
+ *
+ * Returns a full payload (not just an embed) because the buttons are what make
+ * it work - Discord no longer needs staff to bolt on a reaction-role bot.
+ */
 export function rolesPanelEmbed(ctx = {}) {
   // Discord does NOT render <@&id> inside a field *name* - it shows the raw
-  // text. Mentions only resolve in the description and in field values, so
-  // the whole list lives in the description.
+  // text. Mentions only resolve in the description and in field values.
+  const lines = SELF_ROLES.map((r) => {
+    const id = ctx.roles?.[r.key];
+    return `${r.emoji}  ${id ? `<@&${id}>` : `**${r.label}**`}\n\u2570 ${r.description}`;
+  });
+
   return base(COLORS.primary)
     .setTitle(`${EMOJI.sparkles} Self-Assignable Roles`)
     .setDescription(
       [
-        'Pick up the roles you want. Staff can wire these to a reaction-role menu.',
+        'Press a button to give yourself a role. Press it again to take it off.',
         '',
-        `${mention(ctx.roles?.giveawayPing)}`,
-        'Get pinged every time a new giveaway goes live.',
+        lines.join('\n\n'),
         '',
-        `${mention(ctx.roles?.member)}`,
-        'Default role, granted once you accept the rules.',
-        '',
-        `${mention(ctx.roles?.giveawayFunder)}`,
-        `Fund a prize and you get this role — it unlocks ${chan(ctx.channels?.createGiveaway)} and starts you on the Patron ladder.`,
+        `${mention(ctx.roles?.giveawayFunder)} is **earned**, not self-served \u2014 fund a prize and staff hand it to you. It unlocks ${chan(ctx.channels?.createGiveaway)} and starts you on the Patron ladder.`,
       ].join('\n'),
     );
+}
+
+/** Buttons for the self-role panel, five per row. */
+export function rolesPanelComponents(ctx = {}) {
+  const rows = [];
+  for (const group of chunk(SELF_ROLES, 5)) {
+    const row = new ActionRowBuilder();
+    for (const r of group) {
+      row.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${IDS.roleToggle}:${r.key}`)
+          .setLabel(r.label)
+          .setEmoji(r.emoji)
+          .setStyle(ButtonStyle.Secondary),
+      );
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
+/** Full payload for the get-roles channel. */
+export function rolesPanel(ctx = {}) {
+  return { embeds: [rolesPanelEmbed(ctx)], components: rolesPanelComponents(ctx) };
 }
 
 /** The create-giveaway panel — funder gated. */

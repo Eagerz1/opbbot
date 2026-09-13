@@ -57,6 +57,8 @@ export const IDS = {
   rewardsBoard: 'rw:board',
   rewardsHow: 'rw:how',
   patreonPerks: 'pt:perks',
+  // Self-assignable role buttons: rr:toggle:<roleKey>
+  roleToggle: 'rr:toggle',
 };
 
 /** Chat XP tuning. */

@@ -376,7 +376,7 @@ export function renderPage() {
         </div>
         <p style="color:var(--muted);font-size:13px;margin-top:14px">
           Bonuses <strong>stack</strong>: base 1 + highest patron tier + highest chat role =
-          <strong>up to 17 entries</strong>. XP multipliers multiply (up to 2.25×).
+          <strong>up to 2 entries</strong>. XP multipliers multiply (up to 2.25×).
         </p>
       </div>
 

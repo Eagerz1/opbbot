@@ -6,7 +6,7 @@ import { refreshGiveaway } from '../lib/giveaways.js';
 import { memberBuffs } from '../lib/util.js';
 import { buildRankEmbed } from '../commands/rank.js';
 import { buildLeaderboard } from '../commands/leaderboard.js';
-import { PATRON_KEYS } from '../config/blueprint.js';
+import { PATRON_KEYS, SELF_ROLES } from '../config/blueprint.js';
 import { roleStepComponents, readModal } from '../lib/giveaway-panel.js';
 import { validateDraft, publishDraft, openCreatePanel } from '../lib/giveaway-create.js';
 import { saveDraft, getDraft, updateDraft, deleteDraft } from '../lib/drafts.js';
@@ -38,6 +38,8 @@ async function handleCommand(interaction, client) {
 
 async function handleButton(interaction, client) {
   const [ns, action, arg] = interaction.customId.split(':');
+
+  if (ns === 'rr' && action === 'toggle') return toggleSelfRole(interaction, arg);
 
   if (ns === 'gw') {
     if (action === 'enter') return enterGiveaway(interaction, client, arg);
@@ -81,6 +83,59 @@ async function handleButton(interaction, client) {
       });
     }
   }
+}
+
+/* -------------------------- self-assign roles ------------------------ */
+
+/** Give or take a self-assignable role, from the get-roles panel buttons. */
+async function toggleSelfRole(interaction, roleKey) {
+  const spec = SELF_ROLES.find((r) => r.key === roleKey);
+  if (!spec) {
+    return interaction.reply({ embeds: [errEmbed('Unknown role', 'That button is out of date. Ask staff to re-run `/setup`.')], flags: MessageFlags.Ephemeral });
+  }
+
+  const cfg = getGuildConfig(interaction.guild.id);
+  const roleId = cfg.roles?.[roleKey];
+  const role = roleId ? interaction.guild.roles.cache.get(roleId) : null;
+
+  if (!role) {
+    return interaction.reply({
+      embeds: [errEmbed('Role missing', `**${spec.label}** does not exist yet. Ask staff to run \`/setup\`.`)],
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  // A bot cannot touch a role at or above its own position.
+  const me = interaction.guild.members.me;
+  if (me && role.position >= me.roles.highest.position) {
+    return interaction.reply({
+      embeds: [
+        errEmbed(
+          'I cannot assign that role',
+          `**${role.name}** sits above me in the role list. Staff: drag **${BRAND.name}** above it in Server Settings \u2192 Roles.`,
+        ),
+      ],
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const has = interaction.member.roles.cache.has(role.id);
+  try {
+    if (has) await interaction.member.roles.remove(role, 'Self-assign panel');
+    else await interaction.member.roles.add(role, 'Self-assign panel');
+  } catch (err) {
+    return interaction.reply({ embeds: [errEmbed('That did not work', err.message)], flags: MessageFlags.Ephemeral });
+  }
+
+  return interaction.reply({
+    embeds: [
+      okEmbed(
+        has ? 'Role removed' : 'Role added',
+        has ? `You no longer have ${role}. Press the button again to get it back.` : `You now have ${role}. Press the button again to remove it.`,
+      ),
+    ],
+    flags: MessageFlags.Ephemeral,
+  });
 }
 
 /* ---------------------------- modal submit --------------------------- */

@@ -55,7 +55,7 @@ export const PATRON_TIERS = [
     color: 0xff8ac4,
     giveaways: 1,
     requirement: '1 giveaway funded',
-    entryBonus: 1,
+    entryBonus: 0.1,
     xpMultiplier: 1.1,
     perks: [
       'Funded your first giveaway',
@@ -71,7 +71,7 @@ export const PATRON_TIERS = [
     color: 0xff5fae,
     giveaways: 3,
     requirement: '3 giveaways funded',
-    entryBonus: 2,
+    entryBonus: 0.2,
     xpMultiplier: 1.2,
     perks: [
       'Everything in Patron',
@@ -87,7 +87,7 @@ export const PATRON_TIERS = [
     color: 0xeb459e,
     giveaways: 5,
     requirement: '5 giveaways funded',
-    entryBonus: 3,
+    entryBonus: 0.3,
     xpMultiplier: 1.3,
     perks: [
       'Everything in Patron +',
@@ -103,7 +103,7 @@ export const PATRON_TIERS = [
     color: 0xa855f7,
     giveaways: 10,
     requirement: '10 giveaways funded',
-    entryBonus: 5,
+    entryBonus: 0.4,
     xpMultiplier: 1.4,
     perks: [
       'Everything in Patron ++',
@@ -119,7 +119,7 @@ export const PATRON_TIERS = [
     color: 0xffd700,
     giveaways: 20,
     requirement: '20 giveaways funded',
-    entryBonus: 8,
+    entryBonus: 0.5,
     xpMultiplier: 1.5,
     perks: [
       'Everything in Patron +++',
@@ -142,7 +142,7 @@ export const CHAT_LEVEL_ROLES = [
     name: '\u{1F5E8}\uFE0F Chat Lvl 5',
     level: 5,
     color: 0x95e1d3,
-    entryBonus: 1,
+    entryBonus: 0.1,
     xpMultiplier: 1.1,
     perks: ['+1 giveaway entry', '1.1\u00d7 XP', 'Embed links & external emoji in chat'],
   },
@@ -151,7 +151,7 @@ export const CHAT_LEVEL_ROLES = [
     name: '\u{1F4AC} Chat Lvl 10',
     level: 10,
     color: 0x4ecdc4,
-    entryBonus: 2,
+    entryBonus: 0.2,
     xpMultiplier: 1.2,
     perks: ['+2 giveaway entries', '1.2\u00d7 XP', 'Attach files in media & memes'],
   },
@@ -160,7 +160,7 @@ export const CHAT_LEVEL_ROLES = [
     name: '\u{1F50A} Chat Lvl 25',
     level: 25,
     color: 0x1abc9c,
-    entryBonus: 3,
+    entryBonus: 0.3,
     xpMultiplier: 1.3,
     perks: ['+3 giveaway entries', '1.3\u00d7 XP', 'Create threads + use the soundboard'],
   },
@@ -169,7 +169,7 @@ export const CHAT_LEVEL_ROLES = [
     name: '\u{1F525} Chat Lvl 50',
     level: 50,
     color: 0xff9f1c,
-    entryBonus: 5,
+    entryBonus: 0.4,
     xpMultiplier: 1.4,
     perks: ['+5 giveaway entries', '1.4\u00d7 XP', 'Hoisted in the member list'],
   },
@@ -178,7 +178,7 @@ export const CHAT_LEVEL_ROLES = [
     name: '\u{1F31F} Chat Lvl 100',
     level: 100,
     color: 0xff6b6b,
-    entryBonus: 8,
+    entryBonus: 0.5,
     xpMultiplier: 1.5,
     perks: ['+8 giveaway entries', '1.5\u00d7 XP', 'Change your own nickname + veteran flex'],
   },
@@ -249,22 +249,15 @@ export const ROLES = [
     group: 'giveaway',
     description: 'REQUIRED to see & use the create-giveaway channel. Funders pay for the prizes.',
   },
-  ...PATRON_TIERS.map((t) => ({
-    key: t.key,
-    name: t.name,
-    color: t.color,
-    hoist: true,
-    mentionable: false,
-    permissions: [],
-    group: 'patron',
-    tier: t.tier,
-    description: `Patron tier ${t.tier} (${t.requirement}) - +${t.entryBonus} entries, ${t.xpMultiplier}× XP.`,
-  })),
-  ...CHAT_LEVEL_ROLES.map((c) => ({
+  // Reward ladders are listed highest-tier-first so the strongest role ends up
+  // highest in Discord's list and becomes the member's displayed top role.
+  // Chat levels sit ABOVE patron tiers, so an active chatter shows their chat
+  // colour even if they have also funded giveaways.
+  ...[...CHAT_LEVEL_ROLES].reverse().map((c) => ({
     key: c.key,
     name: c.name,
     color: c.color,
-    hoist: c.level >= 50,
+    hoist: true,
     mentionable: false,
     permissions:
       c.level >= 100
@@ -277,6 +270,17 @@ export const ROLES = [
     group: 'chat',
     level: c.level,
     description: `Chat reward at level ${c.level} - +${c.entryBonus} entries, ${c.xpMultiplier}× XP.`,
+  })),
+  ...[...PATRON_TIERS].reverse().map((t) => ({
+    key: t.key,
+    name: t.name,
+    color: t.color,
+    hoist: true,
+    mentionable: false,
+    permissions: [],
+    group: 'patron',
+    tier: t.tier,
+    description: `Patron tier ${t.tier} (${t.requirement}) - +${t.entryBonus} entries, ${t.xpMultiplier}× XP.`,
   })),
   {
     key: 'booster',
@@ -298,6 +302,46 @@ export const ROLES = [
     permissions: [],
     group: 'community',
     description: 'Self-assign to get pinged on every new giveaway.',
+  },
+  {
+    key: 'eventPing',
+    name: '🎮 Event Ping',
+    color: 0x5865f2,
+    hoist: false,
+    mentionable: true,
+    permissions: [],
+    group: 'community',
+    description: 'Self-assign for game nights and community events.',
+  },
+  {
+    key: 'announcementPing',
+    name: '📢 Announcement Ping',
+    color: 0xe67e22,
+    hoist: false,
+    mentionable: true,
+    permissions: [],
+    group: 'community',
+    description: 'Self-assign for server announcements.',
+  },
+  {
+    key: 'bumpPing',
+    name: '📈 Bump Squad',
+    color: 0x2ecc71,
+    hoist: false,
+    mentionable: true,
+    permissions: [],
+    group: 'community',
+    description: 'Self-assign to be reminded to bump the server.',
+  },
+  {
+    key: 'contentPing',
+    name: '🎬 Content Ping',
+    color: 0xe91e63,
+    hoist: false,
+    mentionable: true,
+    permissions: [],
+    group: 'community',
+    description: 'Self-assign for new video / stream notifications.',
   },
   {
     key: 'member',
@@ -496,6 +540,46 @@ export const CATEGORIES = [
   },
 ];
 
+/**
+ * Roles members can pick up themselves from the get-roles panel.
+ *
+ * Each one gets a button carrying its own emoji. Only cosmetic / opt-in roles
+ * belong here - never anything that grants power (staff, funder, patron or
+ * chat rewards are all earned, not self-served).
+ */
+export const SELF_ROLES = [
+  {
+    key: 'giveawayPing',
+    emoji: '\u{1F514}',
+    label: 'Giveaway Ping',
+    description: 'Get pinged the moment a new giveaway goes live.',
+  },
+  {
+    key: 'eventPing',
+    emoji: '\u{1F3AE}',
+    label: 'Event Ping',
+    description: 'Pinged for game nights, movie nights and community events.',
+  },
+  {
+    key: 'announcementPing',
+    emoji: '\u{1F4E2}',
+    label: 'Announcement Ping',
+    description: 'Pinged for server announcements and big news.',
+  },
+  {
+    key: 'bumpPing',
+    emoji: '\u{1F4C8}',
+    label: 'Bump Squad',
+    description: 'Reminded to bump the server so more people find us.',
+  },
+  {
+    key: 'contentPing',
+    emoji: '\u{1F3AC}',
+    label: 'Content Ping',
+    description: 'Pinged when new videos or streams drop.',
+  },
+];
+
 /** Flat list of every channel with its category attached. */
 export function allChannels() {
   return CATEGORIES.flatMap((cat) => cat.channels.map((ch) => ({ ...ch, category: cat.key, categoryName: cat.name })));
@@ -516,11 +600,15 @@ export function buffsForRoleKeys(keys) {
   const set = new Set(keys);
   const patron = PATRON_TIERS.filter((t) => set.has(t.key)).sort((a, b) => b.tier - a.tier)[0] ?? null;
   const chat = CHAT_LEVEL_ROLES.filter((c) => set.has(c.key)).sort((a, b) => b.level - a.level)[0] ?? null;
+  // Bonuses are fractional (0.1 .. 0.5), so round to one decimal - otherwise
+  // 1 + 0.3 + 0.4 lands on 1.7000000000000002.
+  const entries = Math.round((1 + (patron?.entryBonus ?? 0) + (chat?.entryBonus ?? 0)) * 10) / 10;
+
   return {
     patron,
     chat,
     // Base entry is 1. Highest patron tier + highest chat role stack.
-    entries: 1 + (patron?.entryBonus ?? 0) + (chat?.entryBonus ?? 0),
+    entries,
     xpMultiplier: Math.max(patron?.xpMultiplier ?? 1, 1) * Math.max(chat?.xpMultiplier ?? 1, 1),
   };
 }

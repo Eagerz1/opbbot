@@ -8,7 +8,7 @@ process.env.DATABASE_PATH = join(tmpdir(), `opb-test-${Date.now()}-${Math.random
 const { MockGuild, ChannelType } = await import('./mock-discord.js');
 const { PermissionFlagsBits } = await import('discord.js');
 const { runSetup, normalizeName, summarize } = await import('../src/lib/setup-engine.js');
-const { CATEGORIES, ROLES, countPlan, channelName, buffsForRoleKeys, PATRON_TIERS, CHAT_LEVEL_ROLES } = await import('../src/config/blueprint.js');
+const { CATEGORIES, ROLES, countPlan, channelName, buffsForRoleKeys, PATRON_TIERS, CHAT_LEVEL_ROLES, SELF_ROLES } = await import('../src/config/blueprint.js');
 const { parseDuration, formatDuration, pickWinners } = await import('../src/lib/util.js');
 const { levelFromXp, totalXpFor } = await import('../src/lib/levels.js');
 
@@ -198,12 +198,25 @@ test('5 chat level roles each grant a real buff', () => {
   }
 });
 
-test('patron and chat buffs stack', () => {
+test('patron and chat buffs stack as fractional entries', () => {
   assert.equal(buffsForRoleKeys([]).entries, 1);
-  assert.equal(buffsForRoleKeys(['patron5', 'chat100']).entries, 17);
-  assert.equal(buffsForRoleKeys(['patron1', 'chat5']).entries, 3);
+  // bonuses are +0.1 .. +0.5, so the very best a member can reach is 2.0
+  assert.equal(buffsForRoleKeys(['patron5', 'chat100']).entries, 2);
+  assert.equal(buffsForRoleKeys(['patron1', 'chat5']).entries, 1.2);
+  assert.equal(buffsForRoleKeys(['patron3', 'chat50']).entries, 1.7);
   // only the highest of each family counts
-  assert.equal(buffsForRoleKeys(['patron1', 'patron5']).entries, 9);
+  assert.equal(buffsForRoleKeys(['patron1', 'patron5']).entries, 1.5);
+  assert.equal(buffsForRoleKeys(['chat5', 'chat100']).entries, 1.5);
+});
+
+test('entry totals never drift into floating point noise', () => {
+  for (const p of ['patron1', 'patron2', 'patron3', 'patron4', 'patron5']) {
+    for (const c of ['chat5', 'chat10', 'chat25', 'chat50', 'chat100']) {
+      const n = buffsForRoleKeys([p, c]).entries;
+      assert.equal(n, Math.round(n * 10) / 10, `${p}+${c} = ${n} should be clean to 1dp`);
+      assert.ok(n >= 1.2 && n <= 2, `${p}+${c} = ${n} within range`);
+    }
+  }
 });
 
 test('every blueprint permission name is a real discord flag', async () => {
@@ -374,7 +387,7 @@ test('stacked multipliers stay well under 3x', async () => {
 test('roles panel puts mentions in the description, not field names', async () => {
   const { rolesPanelEmbed } = await import('../src/lib/embeds.js');
   const embed = rolesPanelEmbed({
-    roles: { giveawayPing: '111', member: '222', giveawayFunder: '333' },
+    roles: { giveawayPing: '111', eventPing: '222', giveawayFunder: '333' },
     channels: { createGiveaway: '444' },
   });
   const json = embed.toJSON();
@@ -394,4 +407,121 @@ test('patreon embed shows the giveaway requirement, not a price', async () => {
   const text = JSON.stringify(json);
   assert.ok(!/\$\d+\s*\/\s*mo/.test(text), 'no monthly price remains');
   assert.ok(text.includes('funded'), 'states giveaways funded');
+});
+
+/* ---------------------- fractional entry weights --------------------- */
+
+test('database stores fractional entry weights without truncating', async () => {
+  const { addEntry, getEntries, countEntries, createGiveaway } = await import('../src/lib/store.js');
+  const gw = createGiveaway({
+    id: `gw_frac_${Date.now()}`,
+    guildId: 'G1',
+    channelId: 'C1',
+    messageId: 'M1',
+    hostId: 'U0',
+    title: 'Frac',
+    prize: 'Frac',
+    winnerCount: 1,
+    endsAt: Date.now() + 60_000,
+    requiredRoles: [],
+    requiredMode: 'any',
+    patronOnly: false,
+  });
+
+  addEntry(gw.id, 'U1', 1.5);
+  addEntry(gw.id, 'U2', 1.1);
+
+  const rows = getEntries(gw.id);
+  const byUser = Object.fromEntries(rows.map((r) => [r.userId, r.weight]));
+  assert.equal(byUser.U1, 1.5, 'REAL column keeps the fraction');
+  assert.equal(byUser.U2, 1.1);
+
+  const totals = countEntries(gw.id);
+  assert.equal(totals.people, 2);
+  assert.ok(Math.abs(totals.weight - 2.6) < 1e-9, `summed weight ${totals.weight}`);
+});
+
+test('pickWinners respects weights below 1 instead of flattening them', () => {
+  // A 1.5 weight should win appreciably more often than a 1.0 weight.
+  const entries = [
+    { userId: 'heavy', weight: 1.5 },
+    { userId: 'light', weight: 1.0 },
+  ];
+  let heavy = 0;
+  for (let i = 0; i < 4000; i++) if (pickWinners(entries, 1)[0] === 'heavy') heavy++;
+  const share = heavy / 4000;
+  // expected 1.5/2.5 = 0.6
+  assert.ok(share > 0.54 && share < 0.66, `heavy won ${(share * 100).toFixed(1)}% (expected ~60%)`);
+});
+
+test('a zero or missing weight still has a chance, never NaN', () => {
+  const winners = pickWinners([{ userId: 'a', weight: 0 }, { userId: 'b' }], 2);
+  assert.equal(winners.length, 2);
+  assert.ok(winners.includes('a') && winners.includes('b'));
+});
+
+/* -------------------------- role hierarchy --------------------------- */
+
+test('chat roles rank above patron roles, strongest first', () => {
+  const order = ROLES.map((r) => r.key);
+  const chatIdx = ROLES.map((r, i) => (r.group === 'chat' ? i : -1)).filter((i) => i >= 0);
+  const patronIdx = ROLES.map((r, i) => (r.group === 'patron' ? i : -1)).filter((i) => i >= 0);
+
+  assert.ok(Math.max(...chatIdx) < Math.min(...patronIdx), 'every chat role sits above every patron role');
+
+  // earlier in the array = higher in Discord, so levels must descend
+  const chatLevels = ROLES.filter((r) => r.group === 'chat').map((r) => r.level);
+  assert.deepEqual(chatLevels, [100, 50, 25, 10, 5], 'chat roles descend from 100');
+
+  const patronTiers = ROLES.filter((r) => r.group === 'patron').map((r) => r.tier);
+  assert.deepEqual(patronTiers, [5, 4, 3, 2, 1], 'patron roles descend from tier 5');
+
+  // reward roles must still sit below staff
+  assert.ok(order.indexOf('mod') < Math.min(...chatIdx), 'staff outrank reward roles');
+});
+
+test('reward roles are hoisted so the top one shows as the display role', () => {
+  for (const r of ROLES.filter((x) => x.group === 'chat' || x.group === 'patron')) {
+    assert.equal(r.hoist, true, `${r.name} should be hoisted`);
+  }
+});
+
+/* --------------------------- self roles ------------------------------ */
+
+test('every self-assignable role exists in the blueprint and has an emoji', () => {
+  const keys = new Set(ROLES.map((r) => r.key));
+  for (const sr of SELF_ROLES) {
+    assert.ok(keys.has(sr.key), `${sr.key} is a real role`);
+    assert.ok(sr.emoji && sr.emoji.length > 0, `${sr.key} has an emoji`);
+    assert.ok(sr.label && sr.description, `${sr.key} is described`);
+  }
+});
+
+test('self roles grant no permissions - they are opt-in cosmetics only', () => {
+  for (const sr of SELF_ROLES) {
+    const role = ROLES.find((r) => r.key === sr.key);
+    assert.deepEqual(role.permissions, [], `${sr.key} must not grant permissions`);
+  }
+});
+
+test('earned roles are never self-assignable', () => {
+  const selfKeys = new Set(SELF_ROLES.map((r) => r.key));
+  for (const earned of ['giveawayFunder', 'giveawayManager', 'mod', 'admin', 'owner', 'patron5', 'chat100']) {
+    assert.ok(!selfKeys.has(earned), `${earned} must not be self-assignable`);
+  }
+});
+
+test('roles panel renders one button per self role, max five per row', async () => {
+  const { rolesPanel } = await import('../src/lib/embeds.js');
+  const ctx = { roles: Object.fromEntries(SELF_ROLES.map((r, i) => [r.key, String(i + 1)])), channels: {} };
+  const payload = rolesPanel(ctx);
+
+  const buttons = payload.components.flatMap((row) => row.toJSON().components);
+  assert.equal(buttons.length, SELF_ROLES.length);
+  for (const row of payload.components) assert.ok(row.toJSON().components.length <= 5, 'max 5 buttons per row');
+
+  for (const [i, sr] of SELF_ROLES.entries()) {
+    assert.equal(buttons[i].custom_id, `rr:toggle:${sr.key}`, 'custom id carries the role key');
+    assert.equal(buttons[i].emoji.name, sr.emoji, 'button shows its emoji');
+  }
 });

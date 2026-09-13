@@ -37,7 +37,7 @@ export async function execute(interaction) {
       },
       {
         name: `${EMOJI.sparkles} How buffs stack`,
-        value: 'Patron tier entries **+** chat level entries. XP multipliers multiply. Max **17 entries** per giveaway.',
+        value: 'Patron tier entries **+** chat level entries. XP multipliers multiply. Max **2 entries** per giveaway (base 1 + up to +0.5 from each ladder).',
       },
     )
     .setFooter({ text: BRAND.footer });

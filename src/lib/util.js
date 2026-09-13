@@ -71,16 +71,23 @@ export function memberBuffs(member) {
   return buffsForRoleKeys(memberRoleKeys(member));
 }
 
-/** Weighted random pick of `count` distinct users. */
+/**
+ * Weighted random pick of `count` distinct users.
+ *
+ * Weights are fractional (1 base + 0.1..0.5 per tier), so the floor is a small
+ * epsilon rather than 1 - clamping to 1 would erase every bonus below a whole
+ * entry and make the draw uniform.
+ */
 export function pickWinners(entries, count) {
+  const w = (e) => (Number.isFinite(e.weight) && e.weight > 0 ? e.weight : 0.0001);
   const pool = entries.map((e) => ({ ...e }));
   const winners = [];
   for (let i = 0; i < count && pool.length > 0; i++) {
-    const total = pool.reduce((s, e) => s + Math.max(1, e.weight), 0);
+    const total = pool.reduce((s, e) => s + w(e), 0);
     let roll = Math.random() * total;
     let idx = 0;
     for (let j = 0; j < pool.length; j++) {
-      roll -= Math.max(1, pool[j].weight);
+      roll -= w(pool[j]);
       if (roll <= 0) {
         idx = j;
         break;

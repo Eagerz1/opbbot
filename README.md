@@ -154,15 +154,32 @@ Tiers are earned by **how many giveaways you have funded**, not by a subscriptio
 
 | Tier | Earned at | Entries | XP |
 |---|---|---|---|
-| 💗 Patron | 1 giveaway funded | +1 | 1.1× |
-| 💖 Patron + | 3 giveaways funded | +2 | 1.2× |
-| 💝 Patron ++ | 5 giveaways funded | +3 | 1.3× |
-| 💜 Patron +++ | 10 giveaways funded | +5 | 1.4× |
-| 👑 Patron ++++ | 20 giveaways funded | +8 | 1.5× |
+| 💗 Patron | 1 giveaway funded | +0.1 | 1.1× |
+| 💖 Patron + | 3 giveaways funded | +0.2 | 1.2× |
+| 💝 Patron ++ | 5 giveaways funded | +0.3 | 1.3× |
+| 💜 Patron +++ | 10 giveaways funded | +0.4 | 1.4× |
+| 👑 Patron ++++ | 20 giveaways funded | +0.5 | 1.5× |
 
 Grant with `/patreon grant user:@someone tier:...` — it clears any existing tier first, so nobody ends up holding two. Thresholds and perks live in `src/config/blueprint.js` (`PATRON_TIERS`); edit them there and every embed updates itself.
 
 Using the official Patreon–Discord integration instead? Just point each Patreon tier at the matching role and skip `/patreon grant`.
+
+## Self-assignable roles
+
+The `🎭│get-roles` channel gets a panel with a button per role. Members click to
+add a role, click again to remove it — no reaction-role bot needed.
+
+| Button | Role | What it does |
+|---|---|---|
+| 🔔 | Giveaway Ping | Pinged when a giveaway goes live |
+| 🎮 | Event Ping | Game nights, movie nights, community events |
+| 📢 | Announcement Ping | Server announcements and big news |
+| 📈 | Bump Squad | Reminders to bump the server |
+| 🎬 | Content Ping | New videos / streams |
+
+Edit `SELF_ROLES` in `src/config/blueprint.js` to change the list, the emoji or
+the wording. Only cosmetic opt-in roles belong here — earned roles (Giveaway
+Funder, patron tiers, chat levels) are deliberately excluded.
 
 ## Chat rewards
 
@@ -170,11 +187,11 @@ Members earn **15–25 XP** per message, once a minute. Info, staff and giveaway
 
 | Role | Unlocks at | Entries | XP | Extra |
 |---|---|---|---|---|
-| 🗨️ Chat Lvl 5 | level 5 | +1 | 1.1× | Embed links, external emoji |
-| 💬 Chat Lvl 10 | level 10 | +2 | 1.2× | Attach files |
-| 🔊 Chat Lvl 25 | level 25 | +3 | 1.3× | Threads + soundboard |
-| 🔥 Chat Lvl 50 | level 50 | +5 | 1.4× | Hoisted in member list |
-| 🌟 Chat Lvl 100 | level 100 | +8 | 1.5× | Change own nickname |
+| 🗨️ Chat Lvl 5 | level 5 | +0.1 | 1.1× | Embed links, external emoji |
+| 💬 Chat Lvl 10 | level 10 | +0.2 | 1.2× | Attach files |
+| 🔊 Chat Lvl 25 | level 25 | +0.3 | 1.3× | Threads + soundboard |
+| 🔥 Chat Lvl 50 | level 50 | +0.4 | 1.4× | Hoisted in member list |
+| 🌟 Chat Lvl 100 | level 100 | +0.5 | 1.5× | Change own nickname |
 
 Multipliers stay inside a deliberate **1.1× – 1.5×** band. In a small community a 2× rate lets one heavy chatter dominate every draw.
 
@@ -182,7 +199,7 @@ Roles are granted **automatically** on level-up and announced in `🎊│level-u
 
 ### How buffs stack
 
-Base **1 entry** + your highest Patron tier + your highest Chat Level role → **up to 17 entries**. XP multipliers multiply (up to **2.25×**). `/rank` shows a member their exact numbers.
+Base **1 entry** + your highest Patron tier (+0.1 → +0.5) + your highest Chat Level role (+0.1 → +0.5) → **up to 2 entries**. XP multipliers multiply (up to **2.25×**). `/rank` shows a member their exact numbers.
 
 ---
 
