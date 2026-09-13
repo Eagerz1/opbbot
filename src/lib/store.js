@@ -2,7 +2,7 @@
  * SQLite persistence. One file, synchronous, zero-config.
  * Survives restarts so live giveaways and XP are never lost.
  */
-import Database from 'better-sqlite3';
+import { Database, driver } from './db.js';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
@@ -11,7 +11,7 @@ const DB_PATH = process.env.DATABASE_PATH || resolve(process.cwd(), 'data/opb.sq
 mkdirSync(dirname(DB_PATH), { recursive: true });
 
 export const db = new Database(DB_PATH);
-db.pragma('journal_mode = WAL');
+export const dbDriver = driver;
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS guild_config (

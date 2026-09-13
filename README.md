@@ -8,30 +8,31 @@ A Discord bot that builds your whole server with one command, then runs the give
 
 ## Quick start
 
+Needs **Node 22+** ([download](https://nodejs.org)). Check with `node -v`.
+
 ```bash
+git clone -b arena/01a09aab-opbbot https://github.com/Eagerz1/opbbot.git
+cd opbbot
 npm install
-cp .env.example .env      # add your DISCORD_TOKEN + CLIENT_ID
-npm run deploy            # register the slash commands
-npm start                 # run the bot
+
+cp .env.example .env      # Windows: copy .env.example .env
+                          # then paste your DISCORD_TOKEN + CLIENT_ID into it
+
+npm run doctor            # checks Node, .env and your token before you start
+npm run deploy            # registers the slash commands
+npm start                 # runs the bot
 ```
 
 Then in Discord: **`/setup`**
 
+📖 **[Full step-by-step guide → SETUP.md](SETUP.md)** — creating the bot, getting your token, inviting it, and hosting it 24/7.
+
 > Want to see the whole server layout before running anything?
 > `npm run preview` → <http://localhost:3000>
 
----
+### No native compilation
 
-## Creating the bot (5 minutes)
-
-1. Go to the [Discord Developer Portal](https://discord.com/developers/applications) → **New Application**, name it `OPB Giveaways`.
-2. **Bot** tab → **Reset Token** → copy it into `DISCORD_TOKEN` in `.env`.
-3. Still on the **Bot** tab, enable these **Privileged Gateway Intents**:
-   - ✅ **Server Members Intent** — needed for auto-roles and welcome messages
-   - ✅ **Message Content Intent** — needed for chat XP
-4. **General Information** → copy the **Application ID** into `CLIENT_ID`.
-5. **OAuth2 → URL Generator** → scopes `bot` + `applications.commands`, permission **Administrator**, then open the generated URL and invite the bot.
-6. ⚠️ **Server Settings → Roles** → drag the **OPB Giveaways** role to the very top. Discord will not let a bot manage roles above its own.
+The bot uses Node's built-in SQLite, so `npm install` never invokes a C++ compiler — no `node-gyp` failures, no Visual Studio Build Tools on Windows. It installs `discord.js` and `dotenv` and that's it.
 
 ---
 
@@ -220,10 +221,13 @@ src/
     drafts.js            short-lived drafts for the fallback flow
     giveaways.js         lifecycle, draws, rerolls
     levels.js            XP, level curve, reward roles
-    store.js             SQLite persistence
+    store.js             SQLite persistence + schema migrations
+    db.js                driver shim: node:sqlite, or better-sqlite3 if present
     embeds.js            every embed
     permissions.js       overwrite resolution + safe merging
   preview/               the local preview site
+scripts/
+  doctor.js              pre-flight check for Node, .env, driver and token
 tests/
   setup.test.js          23 tests against a mocked Discord API
   giveaway.test.js       26 tests for the panel, validation and entry gating
@@ -242,8 +246,11 @@ npm test
 
 ## Troubleshooting
 
+Run **`npm run doctor`** first — it checks your Node version, dependencies, `.env`, database driver and token, and names the exact problem.
+
 | Problem | Fix |
 |---|---|
+| `npm install` fails with `node-gyp` errors | You're on Node < 22.5. Upgrade to Node 22 LTS, delete `node_modules`, install again. |
 | Commands don't appear | Run `npm run deploy`. Set `GUILD_ID` in `.env` for instant registration; global takes up to an hour. |
 | "Missing Permissions" during setup | Drag the bot's role to the top of **Server Settings → Roles**. |
 | Reward roles aren't granted | Same thing — the bot's role must sit **above** the roles it assigns. |
