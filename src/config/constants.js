@@ -48,6 +48,11 @@ export const IDS = {
   giveawayEntries: 'gw:entries',
   giveawayCreateButton: 'gw:create',
   giveawayModal: 'gw:modal',
+  // Fallback flow for clients that can't render Label-based modals.
+  giveawayModalLegacy: 'gw:modalLegacy',
+  giveawayRoleSelect: 'gw:roles',
+  giveawayPublish: 'gw:publish',
+  giveawayDiscard: 'gw:discard',
   rewardsRank: 'rw:rank',
   rewardsBoard: 'rw:board',
   rewardsHow: 'rw:how',

@@ -1,9 +1,9 @@
 import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, MessageFlags } from 'discord.js';
 import { COLORS, EMOJI, BRAND } from '../config/constants.js';
-import { createGiveaway, getGiveaway, listActiveGiveaways, getGuildConfig, countEntries, markCancelled } from '../lib/store.js';
-import { publishGiveaway, endGiveaway, rerollGiveaway, refreshGiveaway, logGiveaway } from '../lib/giveaways.js';
-import { parseDuration, formatDuration, makeId } from '../lib/util.js';
+import { getGiveaway, listActiveGiveaways, getGuildConfig, countEntries, markCancelled } from '../lib/store.js';
+import { endGiveaway, rerollGiveaway, refreshGiveaway, logGiveaway } from '../lib/giveaways.js';
 import { errEmbed, okEmbed } from '../lib/embeds.js';
+import { canHost, validateDraft, publishDraft, openCreatePanel } from '../lib/giveaway-create.js';
 
 export const data = new SlashCommandBuilder()
   .setName('giveaway')
@@ -12,14 +12,20 @@ export const data = new SlashCommandBuilder()
   .addSubcommand((s) =>
     s
       .setName('create')
-      .setDescription('Start a giveaway (requires the Giveaway Funder role)')
-      .addStringOption((o) => o.setName('prize').setDescription('What are you giving away?').setRequired(true).setMaxLength(200))
+      .setDescription('Open the giveaway panel (requires the Giveaway Funder role)'),
+  )
+  .addSubcommand((s) =>
+    s
+      .setName('quick')
+      .setDescription('Create a giveaway in one line, without the panel')
+      .addStringOption((o) => o.setName('title').setDescription('Giveaway title').setRequired(true).setMaxLength(100))
+      .addStringOption((o) => o.setName('prize').setDescription('What do you win?').setRequired(true).setMaxLength(500))
       .addStringOption((o) => o.setName('duration').setDescription('e.g. 30m, 2h, 3d, 1w, 1d12h').setRequired(true))
       .addIntegerOption((o) => o.setName('winners').setDescription('How many winners (1-20)').setMinValue(1).setMaxValue(20))
-      .addStringOption((o) => o.setName('description').setDescription('Extra details, requirements, etc.').setMaxLength(1000))
+      .addRoleOption((o) => o.setName('required_role').setDescription('Restrict entry to this role (e.g. @Booster)'))
+      .addRoleOption((o) => o.setName('required_role_2').setDescription('A second role that also grants entry'))
       .addChannelOption((o) => o.setName('channel').setDescription('Where to post (defaults to the OPB giveaways channel)'))
-      .addBooleanOption((o) => o.setName('patron_only').setDescription('Restrict entry to Patron tiers'))
-      .addRoleOption((o) => o.setName('required_role').setDescription('Extra role needed to enter')),
+      .addBooleanOption((o) => o.setName('patron_only').setDescription('Restrict entry to Patron tiers')),
   )
   .addSubcommand((s) =>
     s
@@ -42,17 +48,7 @@ export const data = new SlashCommandBuilder()
   )
   .addSubcommand((s) => s.setName('list').setDescription('List every running giveaway'));
 
-/** Funder / manager / admin gate. */
-function canHost(member) {
-  const cfg = getGuildConfig(member.guild.id);
-  const funder = cfg.roles?.giveawayFunder;
-  const manager = cfg.roles?.giveawayManager;
-  if (member.permissions.has(PermissionFlagsBits.Administrator)) return true;
-  if (funder && member.roles.cache.has(funder)) return true;
-  if (manager && member.roles.cache.has(manager)) return true;
-  return false;
-}
-
+/** End / reroll / cancel gate. `canHost` lives in lib/giveaway-create.js. */
 function canManage(member) {
   const cfg = getGuildConfig(member.guild.id);
   const manager = cfg.roles?.giveawayManager;
@@ -64,7 +60,12 @@ export async function execute(interaction) {
   const sub = interaction.options.getSubcommand();
   const cfg = getGuildConfig(interaction.guild.id);
 
+  // The panel does its own permission check before showing the modal.
   if (sub === 'create') {
+    return openCreatePanel(interaction);
+  }
+
+  if (sub === 'quick') {
     if (!canHost(interaction.member)) {
       const roleMention = cfg.roles?.giveawayFunder ? `<@&${cfg.roles.giveawayFunder}>` : '**💰 Giveaway Funder**';
       return interaction.reply({
@@ -73,52 +74,49 @@ export async function execute(interaction) {
       });
     }
 
-    const prize = interaction.options.getString('prize');
-    const durationRaw = interaction.options.getString('duration');
-    const ms = parseDuration(durationRaw);
-    if (!ms || ms < 10_000) {
-      return interaction.reply({
-        embeds: [errEmbed('Invalid duration', 'Use formats like `30m`, `2h`, `3d`, `1w` or `1d12h`. Minimum 10 seconds.')],
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-    if (ms > 90 * 86400000) {
-      return interaction.reply({ embeds: [errEmbed('Too long', 'Maximum giveaway length is 90 days.')], flags: MessageFlags.Ephemeral });
+    const roleIds = [interaction.options.getRole('required_role')?.id, interaction.options.getRole('required_role_2')?.id].filter(Boolean);
+
+    const result = validateDraft(
+      {
+        title: interaction.options.getString('title'),
+        prize: interaction.options.getString('prize'),
+        winnersRaw: String(interaction.options.getInteger('winners') ?? 1),
+        durationRaw: interaction.options.getString('duration'),
+        roleIds,
+      },
+      { guild: interaction.guild },
+    );
+
+    if (!result.ok) {
+      return interaction.reply({ embeds: [errEmbed('Check those fields', result.errors.join('\n'))], flags: MessageFlags.Ephemeral });
     }
 
-    const target =
-      interaction.options.getChannel('channel') ??
-      (cfg.channels?.giveaways ? await interaction.guild.channels.fetch(cfg.channels.giveaways).catch(() => null) : null) ??
-      interaction.channel;
-
-    if (!target?.isTextBased()) {
-      return interaction.reply({ embeds: [errEmbed('Bad channel', 'Pick a text channel, or run `/setup` first.')], flags: MessageFlags.Ephemeral });
+    const target = interaction.options.getChannel('channel') ?? null;
+    if (target && !target.isTextBased()) {
+      return interaction.reply({ embeds: [errEmbed('Bad channel', 'Pick a text channel.')], flags: MessageFlags.Ephemeral });
     }
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const gw = createGiveaway({
-      id: makeId(),
-      guildId: interaction.guild.id,
-      channelId: target.id,
-      hostId: interaction.user.id,
-      prize,
-      description: interaction.options.getString('description'),
-      winnerCount: interaction.options.getInteger('winners') ?? 1,
-      endsAt: Date.now() + ms,
-      patronOnly: interaction.options.getBoolean('patron_only') ?? false,
-      requiredRole: interaction.options.getRole('required_role')?.id ?? null,
-    });
+    const draft = { ...result.value, patronOnly: interaction.options.getBoolean('patron_only') ?? false };
 
     try {
-      const msg = await publishGiveaway(interaction.client, gw);
-      await logGiveaway(interaction.client, interaction.guild.id, {
-        title: 'Giveaway created',
-        description: `**${prize}** · ID \`${gw.id}\`\nHost: <@${interaction.user.id}>\nEnds in ${formatDuration(ms)} · ${gw.winnerCount} winner(s)`,
-        color: COLORS.success,
-      });
+      const { giveaway, message, channel } = await publishDraft(interaction, draft, { channel: target });
       await interaction.editReply({
-        embeds: [okEmbed('Giveaway live', `**${prize}** is up in ${target}.\nEnds in **${formatDuration(ms)}** · ID \`${gw.id}\`\n\n${msg.url}`)],
+        embeds: [
+          okEmbed(
+            'Giveaway is live',
+            [
+              `**${giveaway.title}**`,
+              `Prize: ${draft.prize}`,
+              `${draft.winnerCount} winner${draft.winnerCount > 1 ? 's' : ''} · ends in **${draft.durationLabel}**`,
+              draft.roleIds.length ? `Restricted to ${draft.roleIds.map((r) => `<@&${r}>`).join(', ')}` : 'Open to everyone',
+              '',
+              `Posted in ${channel} → ${message.url}`,
+              `ID \`${giveaway.id}\``,
+            ].join('\n'),
+          ),
+        ],
       });
     } catch (err) {
       await interaction.editReply({ embeds: [errEmbed('Could not post the giveaway', err.message)] });
@@ -140,7 +138,7 @@ export async function execute(interaction) {
           .slice(0, 15)
           .map((g) => {
             const e = countEntries(g.id);
-            return `**${g.prize}** · \`${g.id}\`\n<#${g.channelId}> · ends <t:${Math.floor(g.endsAt / 1000)}:R> · ${e.people} entries · ${g.winnerCount} winner(s)`;
+            return `**${g.title ?? g.prize}** · \`${g.id}\`\n<#${g.channelId}> · ends <t:${Math.floor(g.endsAt / 1000)}:R> · ${e.people} entries · ${g.winnerCount} winner(s)`;
           })
           .join('\n\n'),
       );
@@ -187,9 +185,9 @@ export async function execute(interaction) {
     await refreshGiveaway(interaction.client, id);
     await logGiveaway(interaction.client, interaction.guild.id, {
       title: 'Giveaway cancelled',
-      description: `**${gw.prize}** · ID \`${gw.id}\`\nBy <@${interaction.user.id}>`,
+      description: `**${gw.title ?? gw.prize}** · ID \`${gw.id}\`\nBy <@${interaction.user.id}>`,
       color: COLORS.danger,
     });
-    return interaction.editReply({ embeds: [okEmbed('Cancelled', `**${gw.prize}** was cancelled. No winners drawn.`)] });
+    return interaction.editReply({ embeds: [okEmbed('Cancelled', `**${gw.title ?? gw.prize}** was cancelled. No winners drawn.`)] });
   }
 }

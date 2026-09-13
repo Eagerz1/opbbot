@@ -63,6 +63,33 @@ CREATE INDEX IF NOT EXISTS idx_gw_active ON giveaways (guild_id, ended, cancelle
 CREATE INDEX IF NOT EXISTS idx_levels_xp ON levels (guild_id, xp DESC);
 `);
 
+/* ---------------------------- migrations ---------------------------- */
+/**
+ * Additive migrations so an existing database keeps its live giveaways.
+ * `title` splits the giveaway headline from the prize text, and
+ * `required_roles` supersedes the single `required_role` column.
+ */
+function columns(table) {
+  return new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name));
+}
+
+{
+  const cols = columns('giveaways');
+  if (!cols.has('title')) db.exec(`ALTER TABLE giveaways ADD COLUMN title TEXT`);
+  if (!cols.has('required_roles')) db.exec(`ALTER TABLE giveaways ADD COLUMN required_roles TEXT NOT NULL DEFAULT '[]'`);
+  if (!cols.has('required_mode')) db.exec(`ALTER TABLE giveaways ADD COLUMN required_mode TEXT NOT NULL DEFAULT 'any'`);
+
+  // Fold the legacy single-role column into the new array.
+  if (cols.has('required_role')) {
+    db.prepare(
+      `UPDATE giveaways SET required_roles = json_array(required_role)
+       WHERE required_role IS NOT NULL AND required_roles = '[]'`,
+    ).run();
+  }
+  // Backfill a title for rows created before the column existed.
+  db.prepare(`UPDATE giveaways SET title = prize WHERE title IS NULL`).run();
+}
+
 /* --------------------------- guild config --------------------------- */
 
 const qGetGuild = db.prepare('SELECT * FROM guild_config WHERE guild_id = ?');
@@ -106,26 +133,32 @@ export function saveGuildConfig(guildId, { roles, channels, separator, setupBy }
 /* ----------------------------- giveaways ---------------------------- */
 
 const qInsertGw = db.prepare(`
-  INSERT INTO giveaways (id, guild_id, channel_id, message_id, host_id, prize, description,
-                         winner_count, ends_at, created_at, patron_only, required_role)
-  VALUES (@id, @guild_id, @channel_id, @message_id, @host_id, @prize, @description,
-          @winner_count, @ends_at, @created_at, @patron_only, @required_role)
+  INSERT INTO giveaways (id, guild_id, channel_id, message_id, host_id, title, prize, description,
+                         winner_count, ends_at, created_at, patron_only, required_role,
+                         required_roles, required_mode)
+  VALUES (@id, @guild_id, @channel_id, @message_id, @host_id, @title, @prize, @description,
+          @winner_count, @ends_at, @created_at, @patron_only, @required_role,
+          @required_roles, @required_mode)
 `);
 
 export function createGiveaway(g) {
+  const roles = (g.requiredRoles ?? (g.requiredRole ? [g.requiredRole] : [])).filter(Boolean);
   qInsertGw.run({
     id: g.id,
     guild_id: g.guildId,
     channel_id: g.channelId,
     message_id: g.messageId ?? null,
     host_id: g.hostId,
+    title: g.title ?? g.prize,
     prize: g.prize,
     description: g.description ?? null,
     winner_count: g.winnerCount,
     ends_at: g.endsAt,
     created_at: Date.now(),
     patron_only: g.patronOnly ? 1 : 0,
-    required_role: g.requiredRole ?? null,
+    required_role: roles[0] ?? null, // kept in sync for backwards compatibility
+    required_roles: JSON.stringify(roles),
+    required_mode: g.requiredMode === 'all' ? 'all' : 'any',
   });
   return getGiveaway(g.id);
 }
@@ -135,12 +168,21 @@ const qGetGwByMsg = db.prepare('SELECT * FROM giveaways WHERE message_id = ?');
 
 function hydrate(row) {
   if (!row) return null;
+  let requiredRoles = [];
+  try {
+    requiredRoles = JSON.parse(row.required_roles ?? '[]');
+  } catch {
+    requiredRoles = [];
+  }
+  if (!requiredRoles.length && row.required_role) requiredRoles = [row.required_role];
+
   return {
     id: row.id,
     guildId: row.guild_id,
     channelId: row.channel_id,
     messageId: row.message_id,
     hostId: row.host_id,
+    title: row.title ?? row.prize,
     prize: row.prize,
     description: row.description,
     winnerCount: row.winner_count,
@@ -149,7 +191,10 @@ function hydrate(row) {
     ended: !!row.ended,
     cancelled: !!row.cancelled,
     patronOnly: !!row.patron_only,
-    requiredRole: row.required_role,
+    requiredRoles,
+    requiredMode: row.required_mode === 'all' ? 'all' : 'any',
+    /** @deprecated use requiredRoles */
+    requiredRole: requiredRoles[0] ?? null,
     winners: JSON.parse(row.winners),
   };
 }

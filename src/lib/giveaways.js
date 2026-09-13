@@ -16,6 +16,9 @@ import {
 import { pickWinners } from './util.js';
 import { EmbedBuilder } from 'discord.js';
 
+/** Headline for announcements. Falls back to the prize for pre-title rows. */
+const label = (gw) => gw.title ?? gw.prize;
+
 let timer = null;
 
 export function startGiveawayLoop(client, intervalMs = 5000) {
@@ -55,7 +58,7 @@ export async function publishGiveaway(client, gw) {
   const pingId = cfg.roles?.giveawayPing;
   if (pingId) {
     await channel
-      .send({ content: `<@&${pingId}> a new giveaway just went live: **${gw.prize}**`, allowedMentions: { roles: [pingId] } })
+      .send({ content: `<@&${pingId}> a new giveaway just went live: **${label(gw)}**`, allowedMentions: { roles: [pingId] } })
       .catch(() => {});
   }
 
@@ -109,8 +112,8 @@ export async function endGiveaway(client, giveawayId, { reason = 'manual', force
     await channel
       .send({
         content: winners.length
-          ? `${EMOJI.trophy} ${winners.map((w) => `<@${w}>`).join(' ')} — you won **${gw.prize}**! You have 24h to claim. ${link}`
-          : `${EMOJI.cross} **${gw.prize}** ended with no valid entries. ${link}`,
+          ? `${EMOJI.trophy} ${winners.map((w) => `<@${w}>`).join(' ')} — you won **${label(gw)}** (${gw.prize})! You have 24h to claim. ${link}`
+          : `${EMOJI.cross} **${label(gw)}** ended with no valid entries. ${link}`,
         allowedMentions: { users: winners },
       })
       .catch(() => {});
@@ -125,7 +128,7 @@ export async function endGiveaway(client, giveawayId, { reason = 'manual', force
           new EmbedBuilder()
             .setColor(COLORS.success)
             .setTitle(`${EMOJI.trophy} You won!`)
-            .setDescription(`You won **${gw.prize}** in **${channel?.guild?.name ?? 'the server'}**.\n\nReply in the giveaway channel within **24 hours** to claim it.`)
+            .setDescription(`You won **${label(gw)}** in **${channel?.guild?.name ?? 'the server'}**.\n\n**Prize:** ${gw.prize}\n\nReply in the giveaway channel within **24 hours** to claim it.`)
             .setFooter({ text: BRAND.footer }),
         ],
       })
@@ -141,8 +144,8 @@ export async function endGiveaway(client, giveawayId, { reason = 'manual', force
         embeds: [
           new EmbedBuilder()
             .setColor(COLORS.giveaway)
-            .setTitle(`${EMOJI.trophy} ${gw.prize}`)
-            .setDescription(`**Winner${winners.length > 1 ? 's' : ''}:** ${winners.map((w) => `<@${w}>`).join(', ')}\n**Hosted by:** <@${gw.hostId}>`)
+            .setTitle(`${EMOJI.trophy} ${label(gw)}`)
+            .setDescription(`**Prize:** ${gw.prize}\n**Winner${winners.length > 1 ? 's' : ''}:** ${winners.map((w) => `<@${w}>`).join(', ')}\n**Hosted by:** <@${gw.hostId}>`)
             .setFooter({ text: `${BRAND.footer} · ID ${gw.id}` })
             .setTimestamp(),
         ],
@@ -152,7 +155,7 @@ export async function endGiveaway(client, giveawayId, { reason = 'manual', force
 
   await logGiveaway(client, gw.guildId, {
     title: `Giveaway ended (${reason})`,
-    description: `**${gw.prize}** · ID \`${gw.id}\`\nWinners: ${winners.length ? winners.map((w) => `<@${w}>`).join(', ') : 'none'}\nEntries: ${entries.length}`,
+    description: `**${label(gw)}** · ID \`${gw.id}\`\nWinners: ${winners.length ? winners.map((w) => `<@${w}>`).join(', ') : 'none'}\nEntries: ${entries.length}`,
     color: COLORS.dark,
   });
 
@@ -174,19 +177,19 @@ export async function rerollGiveaway(client, giveawayId, count = 1) {
   const channel = await client.channels.fetch(gw.channelId).catch(() => null);
   await channel
     ?.send({
-      content: `${EMOJI.sparkles} **Reroll** for **${gw.prize}**: ${fresh.map((w) => `<@${w}>`).join(', ')} — 24h to claim.`,
+      content: `${EMOJI.sparkles} **Reroll** for **${label(gw)}**: ${fresh.map((w) => `<@${w}>`).join(', ')} — 24h to claim.`,
       allowedMentions: { users: fresh },
     })
     .catch(() => {});
 
   for (const id of fresh) {
     const user = await client.users.fetch(id).catch(() => null);
-    await user?.send(`${EMOJI.trophy} You won the reroll for **${gw.prize}**! Claim it in the giveaway channel within 24h.`).catch(() => {});
+    await user?.send(`${EMOJI.trophy} You won the reroll for **${label(gw)}** (${gw.prize})! Claim it in the giveaway channel within 24h.`).catch(() => {});
   }
 
   await logGiveaway(client, gw.guildId, {
     title: 'Giveaway rerolled',
-    description: `**${gw.prize}** · ID \`${gw.id}\`\nNew winners: ${fresh.map((w) => `<@${w}>`).join(', ')}`,
+    description: `**${label(gw)}** · ID \`${gw.id}\`\nNew winners: ${fresh.map((w) => `<@${w}>`).join(', ')}`,
     color: COLORS.warning,
   });
 

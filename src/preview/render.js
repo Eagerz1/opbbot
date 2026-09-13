@@ -5,6 +5,7 @@
  */
 import { CATEGORIES, ROLES, PATRON_TIERS, CHAT_LEVEL_ROLES, countPlan, channelName } from '../config/blueprint.js';
 import { BRAND, COLORS } from '../config/constants.js';
+import { buildGiveawayModal } from '../lib/giveaway-panel.js';
 import {
   welcomeEmbed,
   rulesEmbed,
@@ -140,17 +141,38 @@ export function renderPage() {
 
   const fakeGiveaway = {
     id: 'gw_demo1234',
-    prize: 'Steam Deck OLED 1TB',
-    description: 'Must be able to receive delivery in the EU/UK.',
+    title: 'Booster Bonanza #7',
+    prize: '1x Steam Deck OLED 1TB — shipped anywhere in the EU/UK',
+    description: 'Our biggest drop yet. Boosters only.',
     winnerCount: 2,
     hostId: '1',
     endsAt: Date.now() + 86400000,
     patronOnly: false,
-    requiredRole: null,
+    requiredRoles: ['r_booster'],
+    requiredMode: 'any',
     winners: [],
   };
 
   const createPanel = createGiveawayPanel(ctx);
+
+  // Render the real modal definition so the preview can't drift from the code.
+  const modalJson = buildGiveawayModal().toJSON();
+  const modalHtml = modalJson.components
+    .map((label) => {
+      const c = label.component;
+      const isSelect = c.type === 6;
+      const body = isSelect
+        ? `<div class="select">${esc(c.placeholder ?? 'Select…')}<span class="caret">▾</span></div>`
+        : c.style === 2
+          ? `<div class="input area">${esc(c.placeholder ?? '')}</div>`
+          : `<div class="input">${esc(c.placeholder ?? '')}</div>`;
+      return `<div class="mfield">
+        <div class="mlabel">${esc(label.label)}${c.required === false && !/optional/i.test(label.label) ? '<span class="opt">optional</span>' : ''}</div>
+        ${label.description ? `<div class="mdesc">${esc(label.description)}</div>` : ''}
+        ${body}
+      </div>`;
+    })
+    .join('');
   const rewardsPanel = chatRewardsEmbed(ctx);
 
   const tierTable = PATRON_TIERS.map(
@@ -245,6 +267,21 @@ export function renderPage() {
   td.num{font-variant-numeric:tabular-nums;font-weight:600}
   .two{display:grid;grid-template-columns:1fr 1fr;gap:20px}
   @media(max-width:800px){.two{grid-template-columns:1fr}}
+  .modal{background:#313338;border-radius:8px;padding:18px;max-width:520px;
+    box-shadow:0 8px 24px rgba(0,0,0,.4)}
+  .modal-title{font-size:19px;font-weight:700;color:#f2f3f5;margin-bottom:16px}
+  .mfield{margin-bottom:16px}
+  .mlabel{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+    color:#dbdee1;margin-bottom:3px}
+  .opt{margin-left:6px;color:#949ba4;font-weight:500;text-transform:none;letter-spacing:0}
+  .mdesc{font-size:12px;color:#949ba4;margin-bottom:6px}
+  .input{background:#1e1f22;border:1px solid #1e1f22;border-radius:4px;padding:10px;
+    color:#87898c;font-size:14px}
+  .input.area{min-height:64px}
+  .select{background:#1e1f22;border:1px solid #1e1f22;border-radius:4px;padding:10px;
+    color:#87898c;font-size:14px;display:flex;justify-content:space-between;align-items:center}
+  .caret{color:#b5bac1}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
   .note{background:rgba(88,101,242,.1);border:1px solid rgba(88,101,242,.3);
     border-radius:8px;padding:12px 14px;font-size:13px;color:#c9cdfb;margin-bottom:18px}
   .cmd{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:13px}
@@ -282,6 +319,15 @@ export function renderPage() {
             { components: [{ data: { label: 'Enter', style: 3, emoji: { name: '🎁' } } }, { data: { label: 'Entries: 342', style: 2, emoji: { name: '👥' } } }] },
           ],
         })}
+      </div>
+
+      <div class="panel">
+        <h3>🧾 /giveaway create — the panel</h3>
+        <div class="modal">
+          <div class="modal-title">Create a Giveaway</div>
+          ${modalHtml}
+          <div class="modal-actions"><button class="btn secondary">Cancel</button><button class="btn primary">Submit</button></div>
+        </div>
       </div>
 
       <div class="panel">

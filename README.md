@@ -42,7 +42,8 @@ Then in Discord: **`/setup`**
 | `/setup` | Admin | Builds every role, category and channel, then posts all info panels |
 | `/setup preview:true` | Admin | Shows the full plan **without creating anything** |
 | `/setup separator:` | Admin | Pick the name style: `🎁│general`, `🎁｜general`, `🎁-general`, `🎁\|general` |
-| `/giveaway create` | 💰 Funder | Start a giveaway (prize, duration, winners, patron-only…) |
+| `/giveaway create` | 💰 Funder | **Opens the giveaway panel** — title, prize, winners, duration, optional role |
+| `/giveaway quick` | 💰 Funder | Same thing as command options, no popup |
 | `/giveaway list` | Anyone | Every running giveaway |
 | `/giveaway end · reroll · cancel` | Host / Manager | Manage a running giveaway |
 | `/rank` | Anyone | Your level, XP, entry count and active buffs |
@@ -80,6 +81,58 @@ Channel names use `emoji│name`. The `│` is a box-drawing bar, not a pipe —
 
 🛡️ STAFF                🛡️│staff-chat  📋│giveaway-logs  📝│mod-logs
                         🤖│bot-logs  🔒│Staff VC
+```
+
+---
+
+## Creating a giveaway
+
+`/giveaway create` (or the **Create Giveaway** button in `🛠️│create-giveaway`) opens a single popup:
+
+```
+┌─ Create a Giveaway ─────────────────────────────┐
+│ GIVEAWAY TITLE                                  │
+│ The headline on the embed                       │
+│ [ Nitro Drop #12                              ] │
+│                                                 │
+│ WHAT DO YOU WIN?                                │
+│ Describe the prize                              │
+│ [ 1x Discord Nitro (1 month)                  ] │
+│                                                 │
+│ NUMBER OF WINNERS                               │
+│ 1-20                                            │
+│ [ 1                                           ] │
+│                                                 │
+│ DURATION                                        │
+│ 30m · 2h · 3d · 1w · 1d12h                      │
+│ [ 24h                                         ] │
+│                                                 │
+│ REQUIRED ROLE (OPTIONAL)                        │
+│ Leave empty for everyone.                       │
+│ [ 🔽 Anyone can enter — pick a role…          ] │
+└─────────────────────────────────────────────────┘
+```
+
+That last field is a **native role picker**, not a text box — you scroll and click the role, so there's nothing to spell wrong. Leave it empty and anyone can enter; pick `@Booster` and only boosters can. You can select up to **5 roles**, and holding *any* of them grants entry.
+
+On submit the bot posts an embed with an **Enter** button and a live entry counter:
+
+> 🎁 **Booster Bonanza #7**
+> ⏰ Ends in 24 hours
+> ✨ **Prize** — 1x Steam Deck OLED
+> 🏆 **Winners** 2  ·  👥 **Entries** 342  ·  👑 **Hosted by** @you
+> ⚠️ **Requirements** — 🛡️ You need @Booster
+>
+> `[ 🎁 Enter ]` `[ 👥 Entries: 342 ]`
+
+Anyone without the role who presses **Enter** gets a private "you need @Booster to enter" reply instead of a silent failure. Pressing **Enter** twice removes your entry.
+
+### `/giveaway quick`
+
+Same result without the popup — handy for repeat drops:
+
+```
+/giveaway quick title:Nitro Drop #12 prize:1x Nitro duration:24h winners:1 required_role:@Booster
 ```
 
 ### The funder gate
@@ -142,6 +195,8 @@ Re-run `/setup` — it **adopts** anything that already exists instead of duplic
 - **Idempotent setup.** Existing roles/channels are matched by name (ignoring emoji and separators) and reused. Re-running after a failure only creates what's missing.
 - **Crash-safe giveaways.** Everything is in SQLite. If the bot restarts mid-giveaway it resumes on boot and immediately resolves anything that expired while it was down.
 - **Toggle entries.** Pressing **Enter** again removes the entry.
+- **Role requirements are enforced on entry**, not just displayed — and `@everyone` or bot roles picked by mistake are dropped with a note rather than silently locking everyone out.
+- **Nothing is written before it can be posted.** The bot checks it has View/Send/Embed permission in the target channel first, so a failed post never leaves an orphaned giveaway in the database.
 - **Weighted draws.** Bonus entries are real weight in the draw, and winners are always distinct.
 - **Partial failure is survivable.** One channel failing (rate limit, hitting the 500-channel cap) doesn't abort the run; `/setup` reports exactly what failed and why.
 
@@ -160,6 +215,9 @@ src/
   events/                ready, interactionCreate, messageCreate, guildMemberAdd
   lib/
     setup-engine.js      blueprint → real Discord server
+    giveaway-panel.js    the /giveaway create modal (+ legacy fallback)
+    giveaway-create.js   validation & publishing, shared by every entry point
+    drafts.js            short-lived drafts for the fallback flow
     giveaways.js         lifecycle, draws, rerolls
     levels.js            XP, level curve, reward roles
     store.js             SQLite persistence
@@ -168,6 +226,7 @@ src/
   preview/               the local preview site
 tests/
   setup.test.js          23 tests against a mocked Discord API
+  giveaway.test.js       26 tests for the panel, validation and entry gating
   mock-discord.js
 ```
 
@@ -177,7 +236,7 @@ tests/
 npm test
 ```
 
-23 tests run the real setup engine against an in-memory fake of the Discord API and assert the resulting server tree: naming format, category contents, the funder gate, idempotency, panel posting, partial-failure recovery, buff stacking, the level curve and weighted draws.
+49 tests, no token required. `setup.test.js` runs the real setup engine against an in-memory fake of the Discord API and asserts the resulting server tree: naming format, category contents, the funder gate, idempotency, panel posting, partial-failure recovery, buff stacking, the level curve and weighted draws. `giveaway.test.js` covers the creation panel: field layout, that the role field really is a role picker, every validation rule, `@everyone`/bot-role filtering, embed rendering, database round-trips and who is allowed to enter.
 
 ---
 
@@ -191,3 +250,5 @@ npm test
 | No XP being earned | Enable **Message Content Intent** in the Developer Portal. |
 | Channels look like `🎁-\|-general` | You picked the `|` separator. Re-run `/setup separator:` and choose the bar `│`. |
 | Setup stopped partway | Just run `/setup` again — it resumes and only creates what's missing. |
+| The panel won't open | Only 💰 Giveaway Funder, Giveaway Manager and admins can open it. Check the role. |
+| Role picker missing in the panel | Very old Discord clients can't render it; the bot automatically falls back to a text-only form plus a role dropdown afterwards. Updating the app restores the one-popup flow. |

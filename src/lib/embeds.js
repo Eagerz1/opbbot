@@ -80,17 +80,22 @@ export function createGiveawayPanel(ctx = {}) {
       [
         `You can see this channel because you hold ${mention(ctx.roles?.giveawayFunder)}.`,
         '',
-        '**Two ways to start:**',
-        '> Press the button below for a guided form, or',
-        '> run `/giveaway create prize:<thing> duration:<1h/2d> winners:<n>`',
-        '',
-        `Your giveaway posts publicly in ${chan(ctx.channels?.giveaways)} and every action is logged.`,
+        'Press the button below (or run `/giveaway create`) to open the panel.',
+        `It asks for everything in one popup, then posts the giveaway in ${chan(ctx.channels?.giveaways)}.`,
       ].join('\n'),
     )
     .addFields(
-      { name: 'Duration format', value: '`30m` `2h` `3d` `1w` — or combine: `1d12h`', inline: true },
-      { name: 'Winners', value: '1–20 per giveaway', inline: true },
-      { name: 'Patron only?', value: 'Set `patron_only: true` to restrict it', inline: true },
+      {
+        name: '📋 What the panel asks for',
+        value: [
+          '**Title** — the headline on the embed',
+          '**What do you win?** — the prize itself',
+          '**Number of winners** — 1 to 20',
+          '**Duration** — `30m` `2h` `3d` `1w` or `1d12h`',
+          '**Required role** *(optional)* — pick a role to lock entry, e.g. boosters only',
+        ].join('\n'),
+      },
+      { name: '⚡ In a hurry?', value: '`/giveaway quick` takes the same details as command options.', inline: false },
       { name: `${EMOJI.warn} Funder responsibilities`, value: 'You supply the prize. Failing to deliver = role removed and a ban from hosting.' },
     );
 
@@ -192,9 +197,11 @@ export function chatRewardsEmbed(ctx = {}) {
 
 export function giveawayEmbed(gw, { entries = { people: 0, weight: 0 }, hostTag, ended = false, winners = [] } = {}) {
   const endsUnix = Math.floor(gw.endsAt / 1000);
+  const requiredRoles = gw.requiredRoles ?? (gw.requiredRole ? [gw.requiredRole] : []);
+
   const embed = new EmbedBuilder()
     .setColor(ended ? COLORS.dark : COLORS.giveaway)
-    .setTitle(`${EMOJI.gift} ${gw.prize}`)
+    .setTitle(`${EMOJI.gift} ${gw.title ?? gw.prize}`)
     .setFooter({ text: `${BRAND.footer} · ID ${gw.id}` })
     .setTimestamp(gw.endsAt);
 
@@ -209,19 +216,34 @@ export function giveawayEmbed(gw, { entries = { people: 0, weight: 0 }, hostTag,
   } else {
     lines.push(`${EMOJI.clock} Ends <t:${endsUnix}:R> · <t:${endsUnix}:f>`);
   }
+  embed.setDescription(lines.join('\n'));
 
-  lines.push(
-    `${EMOJI.people} **Entries:** ${entries.people} ${entries.weight !== entries.people ? `(${entries.weight} weighted)` : ''}`,
-    `${EMOJI.trophy} **Winners:** ${gw.winnerCount}`,
-    `${EMOJI.crown} **Hosted by:** ${hostTag ? hostTag : `<@${gw.hostId}>`}`,
+  // Prize gets its own field so a long description stays readable.
+  embed.addFields({ name: `${EMOJI.sparkles} Prize`, value: truncate(gw.prize, 1024) });
+
+  embed.addFields(
+    { name: `${EMOJI.trophy} Winners`, value: `**${gw.winnerCount}**`, inline: true },
+    {
+      name: `${EMOJI.people} Entries`,
+      value: `**${entries.people}**${entries.weight !== entries.people ? ` · ${entries.weight} weighted` : ''}`,
+      inline: true,
+    },
+    { name: `${EMOJI.crown} Hosted by`, value: hostTag ?? `<@${gw.hostId}>`, inline: true },
   );
 
-  if (gw.patronOnly) lines.push(`${EMOJI.star} **Patron only** — you need any Patron tier to enter.`);
-  if (gw.requiredRole) lines.push(`${EMOJI.shield} **Required role:** <@&${gw.requiredRole}>`);
+  // Entry requirements.
+  const reqs = [];
+  if (gw.patronOnly) reqs.push(`${EMOJI.star} Any **Patron** tier`);
+  if (requiredRoles.length) {
+    const mode = gw.requiredMode === 'all' ? 'all of' : 'any of';
+    reqs.push(`${EMOJI.shield} You need ${requiredRoles.length > 1 ? `**${mode}** ` : ''}${requiredRoles.map((r) => `<@&${r}>`).join(' ')}`);
+  }
+  if (reqs.length) embed.addFields({ name: `${EMOJI.warn} Requirements`, value: reqs.join('\n') });
 
-  embed.setDescription(lines.join('\n'));
   return embed;
 }
+
+const truncate = (s, n) => (String(s).length > n ? `${String(s).slice(0, n - 1)}…` : String(s));
 
 export function giveawayComponents(gw, { disabled = false, entryCount = 0 } = {}) {
   return [

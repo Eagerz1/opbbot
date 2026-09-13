@@ -25,7 +25,8 @@ export async function execute(interaction) {
       {
         name: `${EMOJI.money} Giveaways`,
         value: [
-          '`/giveaway create` — host one (needs **💰 Giveaway Funder**)',
+          '`/giveaway create` — opens the panel: title, prize, winners, duration + optional role (needs **💰 Giveaway Funder**)',
+          '`/giveaway quick` — same, as command options',
           '`/giveaway list` · `/giveaway end` · `/giveaway reroll` · `/giveaway cancel`',
           `Live giveaways: ${ch('giveaways')} · Funder-only: ${ch('createGiveaway')}`,
         ].join('\n'),
