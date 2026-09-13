@@ -6,7 +6,8 @@
  *   npm run deploy -- --global  force global
  *   npm run deploy -- --clear   remove all commands
  */
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config({ quiet: true });
 import { REST, Routes } from 'discord.js';
 import { readdirSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';

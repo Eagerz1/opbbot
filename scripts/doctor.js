@@ -6,9 +6,11 @@
  * the token itself BEFORE you try to start the bot, so problems show up as a
  * clear checklist instead of a stack trace.
  */
-import 'dotenv/config';
-import { existsSync, readFileSync } from 'node:fs';
+import dotenv from 'dotenv';
+import { existsSync, readFileSync, copyFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+
+dotenv.config({ quiet: true });
 
 const c = { reset: '\x1b[0m', red: '\x1b[31m', green: '\x1b[32m', yellow: '\x1b[33m', gray: '\x1b[90m', bold: '\x1b[1m' };
 const ok = (m, d) => console.log(`${c.green}  ✓${c.reset} ${m}${d ? `${c.gray}  ${d}${c.reset}` : ''}`);
@@ -29,7 +31,7 @@ console.log(`\n${c.bold}OPB Giveaways — setup check${c.reset}\n`);
 /* ------------------------------- node ------------------------------- */
 const [major, minor] = process.versions.node.split('.').map(Number);
 if (major > 22 || (major === 22 && minor >= 5)) ok(`Node ${process.version}`);
-else if (major >= 20) warn(`Node ${process.version} — no built-in SQLite`, 'Either upgrade to Node 22.5+ or run: npm install better-sqlite3');
+else if (major >= 20) warn(`Node ${process.version} — no built-in SQLite`, 'Either upgrade to Node 22 LTS (https://nodejs.org) or run: npm install better-sqlite3');
 else bad(`Node ${process.version} is too old`, 'Install Node 22 LTS from https://nodejs.org');
 
 /* --------------------------- dependencies --------------------------- */
@@ -46,14 +48,27 @@ if (existsSync(resolve('node_modules/discord.js'))) {
 /* ------------------------------ driver ------------------------------ */
 try {
   const { driver } = await import('../src/lib/db.js');
-  ok(`SQLite driver: ${driver}`, driver === 'node:sqlite' ? '(built in — nothing to compile)' : '');
+  ok(`SQLite driver: ${driver}`, driver === 'node:sqlite' ? '(built in — nothing to compile)' : '(external native module)');
 } catch (err) {
-  bad('No SQLite driver', err.message.split('\n')[0]);
+  bad('No working SQLite driver', err.message.split('\n').slice(0, 4).join('\n     '));
 }
 
 /* -------------------------------- env ------------------------------- */
+// Be helpful rather than pedantic: if .env is missing but the template is
+// there, just create it. Telling a Windows user to run `cp` is useless.
 if (!existsSync(resolve('.env'))) {
-  bad('.env file is missing', 'Run: cp .env.example .env   (Windows: copy .env.example .env)');
+  if (existsSync(resolve('.env.example'))) {
+    try {
+      copyFileSync(resolve('.env.example'), resolve('.env'));
+      warn('.env was missing — I created it from .env.example', 'Open .env in a text editor and paste in your DISCORD_TOKEN and CLIENT_ID, then run this again.');
+      // Reload so the checks below see the (still empty) values.
+      dotenv.config({ path: resolve('.env'), override: true, quiet: true });
+    } catch (err) {
+      bad('.env is missing and I could not create it', `${err.message}\n     Copy .env.example to .env by hand.`);
+    }
+  } else {
+    bad('.env and .env.example are both missing', 'Re-clone the repository — something got deleted.');
+  }
 } else {
   ok('.env file found');
 }

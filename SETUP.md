@@ -61,19 +61,37 @@ Unzip it, then `cd` into the folder and run `npm install`.
 
 ## 4. Fill in your `.env`
 
-Copy the template:
+Let the doctor create the file for you:
 
 ```bash
-cp .env.example .env          # Windows: copy .env.example .env
+npm run doctor
 ```
 
-Open `.env` in any text editor and paste your values:
+The first run creates `.env` from the template and tells you what's missing.
+
+<details>
+<summary>Prefer to do it by hand?</summary>
+
+| Shell | Command |
+|---|---|
+| Windows **CMD** | `copy .env.example .env` |
+| Windows **PowerShell** | `Copy-Item .env.example .env` |
+| Mac / Linux | `cp .env.example .env` |
+
+`cp` is a Unix command and does **not** exist in Windows CMD — use `copy` there.
+</details>
+
+Now open `.env` in a text editor and paste your values.
+
+> **Opening `.env` on Windows:** it has no filename, just an extension, so double-clicking may not work. In the `opbbot` folder run `notepad .env`, or open it from VS Code.
 
 ```ini
 DISCORD_TOKEN=MTIzNDU2Nzg5MDEyMzQ1Njc4.GxYzAb.your-real-token-here
 CLIENT_ID=1234567890123456789
 GUILD_ID=9876543210987654321
 ```
+
+No quotes, no spaces around the `=`, and no `<` `>` brackets around the values.
 
 - `GUILD_ID` is optional. **With** it, slash commands appear instantly in that one server. **Without** it, they register globally and can take up to an hour.
 - `.env` is already in `.gitignore`, so your token will never be committed.
@@ -84,7 +102,7 @@ GUILD_ID=9876543210987654321
 npm run doctor
 ```
 
-This verifies your Node version, dependencies, `.env` values, database driver, and asks Discord whether your token actually works:
+Run it again after filling in `.env`. It verifies your Node version, dependencies, `.env` values, database driver, and asks Discord whether your token actually works:
 
 ```
 OPB Giveaways — setup check
@@ -161,6 +179,8 @@ It builds 19 roles, 7 categories and 31 channels, and posts all the info panels.
 
 `npm start` only runs while your terminal is open. For a bot that stays up:
 
+**On Windows** — the simplest option is PM2 below, or create a `start.bat` file containing `npm start` and run that. Closing the window stops the bot either way.
+
 **On your own machine / a VPS** — use [PM2](https://pm2.keymetrics.io/):
 
 ```bash
@@ -193,7 +213,10 @@ Your `.env` and `data/` are untouched by `git pull`.
 
 | Symptom | Cause & fix |
 |---|---|
-| `npm install` fails with `node-gyp` / `MSBuild` errors | You're on Node < 22.5 so it's trying to compile the optional native database. Upgrade Node to 22 LTS and delete `node_modules`, then `npm install` again. |
+| `'cp' is not recognized...` | `cp` is a Mac/Linux command. On Windows CMD use `copy .env.example .env`, or just run `npm run doctor` and it makes the file for you. |
+| `'https:' is not recognized...` | The whole `git clone ...` line is one command — paste it in one go, don't split it across two lines. |
+| `npm install` fails with `node-gyp` / `MSBuild` errors | Nothing in this project needs compiling. If you see this you have a stale `node_modules` from an older version: delete the `node_modules` folder and `package-lock.json`, then `npm install` again. |
+| npm warns about `better-sqlite3` install scripts | Also a stale `node_modules`. Delete it and `package-lock.json`, then reinstall — the current version has no native dependencies. |
 | `DISCORD_TOKEN is missing` | No `.env`, or it's in the wrong folder. It must sit next to `package.json`. Run `npm run doctor`. |
 | `An invalid token was provided` | Token is wrong or was reset. Reset it again in the Developer Portal and paste the new one. |
 | Slash commands don't appear | Run `npm run deploy`. Set `GUILD_ID` for instant registration; global takes up to an hour. Fully quit and reopen Discord. |

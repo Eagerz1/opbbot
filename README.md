@@ -14,13 +14,16 @@ Needs **Node 22+** ([download](https://nodejs.org)). Check with `node -v`.
 git clone -b arena/01a09aab-opbbot https://github.com/Eagerz1/opbbot.git
 cd opbbot
 npm install
+npm run doctor
+```
 
-cp .env.example .env      # Windows: copy .env.example .env
-                          # then paste your DISCORD_TOKEN + CLIENT_ID into it
+`npm run doctor` creates your `.env` for you and tells you exactly what to fill in.
+Open `.env` in a text editor, paste your `DISCORD_TOKEN` and `CLIENT_ID`, then:
 
-npm run doctor            # checks Node, .env and your token before you start
-npm run deploy            # registers the slash commands
-npm start                 # runs the bot
+```bash
+npm run doctor            # re-check — should be all green
+npm run deploy            # register the slash commands
+npm start                 # run the bot
 ```
 
 Then in Discord: **`/setup`**
@@ -32,7 +35,7 @@ Then in Discord: **`/setup`**
 
 ### No native compilation
 
-The bot uses Node's built-in SQLite, so `npm install` never invokes a C++ compiler — no `node-gyp` failures, no Visual Studio Build Tools on Windows. It installs `discord.js` and `dotenv` and that's it.
+Two dependencies, both pure JavaScript: `discord.js` and `dotenv`. The database uses Node's built-in SQLite, so `npm install` never invokes a C++ compiler — no `node-gyp` failures and no Visual Studio Build Tools on Windows.
 
 ---
 

@@ -1,59 +1,87 @@
 /**
- * Database driver.
+ * Database driver selection.
  *
- * Uses Node's built-in `node:sqlite` (Node >= 22.5) so a fresh clone needs
- * NO native compilation - `npm install` can't fail on missing build tools,
- * which is the usual way a Discord bot install dies on Windows.
+ * Prefers Node's built-in `node:sqlite` (Node >= 22.5) so a normal install has
+ * NO native modules and nothing to compile - the usual way a Discord bot
+ * install dies on Windows is a node-gyp/MSBuild error, and this avoids it.
  *
- * If `better-sqlite3` happens to be installed we prefer it (it's stable
- * rather than experimental), so existing deployments keep working unchanged.
- * Both expose the same prepare/run/get/all/exec surface we rely on.
+ * `better-sqlite3` is supported as a fallback for older Node versions, but it
+ * is NOT a dependency. Install it yourself only if you're stuck below Node
+ * 22.5:  npm install better-sqlite3
+ *
+ * Each candidate is *probed* by actually opening an in-memory database before
+ * we commit to it. Importing better-sqlite3 succeeds even when its native
+ * binding is missing or built for the wrong Node version - the failure only
+ * surfaces on first use. Probing turns that late crash into a clean fallback.
  */
 
 let impl = null;
 let driverName = '';
+const notes = [];
 
-/** Try better-sqlite3 first, then fall back to the built-in module. */
+async function tryNodeSqlite() {
+  const { DatabaseSync } = await import('node:sqlite');
+  const Wrapped = wrapNodeSqlite(DatabaseSync);
+  new Wrapped(':memory:').close(); // probe
+  return Wrapped;
+}
+
+async function tryBetterSqlite() {
+  const mod = await import('better-sqlite3');
+  const Ctor = mod.default;
+  new Ctor(':memory:').close(); // probe - throws if the native binding is broken
+  return Ctor;
+}
+
 async function load() {
   if (impl) return impl;
 
+  // 1. Built in, no compilation, always matches the running Node.
   try {
-    const mod = await import('better-sqlite3');
-    impl = mod.default;
-    driverName = 'better-sqlite3';
-    return impl;
-  } catch {
-    // not installed - that's the normal case now
-  }
-
-  try {
-    const { DatabaseSync } = await import('node:sqlite');
-    impl = wrapNodeSqlite(DatabaseSync);
+    impl = await tryNodeSqlite();
     driverName = 'node:sqlite';
     return impl;
   } catch (err) {
-    throw new Error(
-      `No SQLite driver available. This bot needs Node 22.5+ (you have ${process.version}).\n` +
-        `Either upgrade Node, or run: npm install better-sqlite3\n` +
-        `Original error: ${err.message}`,
-    );
+    notes.push(`node:sqlite unavailable (${firstLine(err)})`);
   }
+
+  // 2. Only if someone installed it deliberately (e.g. Node < 22.5).
+  try {
+    impl = await tryBetterSqlite();
+    driverName = 'better-sqlite3';
+    return impl;
+  } catch (err) {
+    notes.push(`better-sqlite3 unavailable (${firstLine(err)})`);
+  }
+
+  throw new Error(
+    [
+      `No working SQLite driver found. This bot needs Node 22.5 or newer.`,
+      `You are running ${process.version}.`,
+      ``,
+      `Fix: install Node 22 LTS (or newer) from https://nodejs.org`,
+      `Or, to stay on this Node version: npm install better-sqlite3`,
+      ``,
+      `Details:`,
+      ...notes.map((n) => `  - ${n}`),
+    ].join('\n'),
+  );
 }
 
+const firstLine = (err) => String(err?.message ?? err).split('\n')[0].slice(0, 120);
+
 /**
- * Adapt node:sqlite's DatabaseSync to the small slice of the
- * better-sqlite3 API this project uses.
+ * Adapt node:sqlite's DatabaseSync to the slice of the better-sqlite3 API
+ * this project uses (prepare/run/get/all, exec, pragma, close).
  */
 function wrapNodeSqlite(DatabaseSync) {
   return class Database {
     constructor(path) {
       this.db = new DatabaseSync(path);
-      // better-sqlite3 returns plain objects; node:sqlite returns
-      // null-prototype objects, which break `{...row}` spreads in some libs.
       try {
         this.db.exec('PRAGMA journal_mode = WAL');
       } catch {
-        /* WAL is unavailable on some filesystems - not fatal */
+        /* WAL isn't available on every filesystem - not fatal */
       }
     }
 
@@ -71,7 +99,6 @@ function wrapNodeSqlite(DatabaseSync) {
     }
 
     pragma(str) {
-      // better-sqlite3 style: db.pragma('journal_mode = WAL')
       return this.db.exec(`PRAGMA ${str}`);
     }
 
@@ -97,10 +124,11 @@ function normalize(args) {
   });
 }
 
-/** Convert null-prototype rows into ordinary objects. */
+/** node:sqlite returns null-prototype rows; make them ordinary objects. */
 function plain(row) {
   return row == null ? row : { ...row };
 }
 
 export const Database = await load();
 export const driver = driverName;
+export const driverNotes = notes;
