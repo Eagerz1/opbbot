@@ -8,6 +8,8 @@
  */
 import dotenv from 'dotenv';
 dotenv.config({ quiet: true });
+import { loadEnv } from './lib/env.js';
+loadEnv();
 import { REST, Routes } from 'discord.js';
 import { readdirSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';

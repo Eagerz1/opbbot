@@ -10,8 +10,10 @@ import dotenv from 'dotenv';
 import { existsSync, readFileSync, copyFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { diagnoseEnv, inspectKey, adoptStray } from './env-doctor.js';
+import { loadEnv } from '../src/lib/env.js';
 
 dotenv.config({ quiet: true });
+const envLoad = loadEnv();
 
 const c = { reset: '\x1b[0m', red: '\x1b[31m', green: '\x1b[32m', yellow: '\x1b[33m', gray: '\x1b[90m', bold: '\x1b[1m' };
 const ok = (m, d) => console.log(`${c.green}  ✓${c.reset} ${m}${d ? `${c.gray}  ${d}${c.reset}` : ''}`);
@@ -85,6 +87,7 @@ if (!envInfo.exists) {
   }
 } else {
   ok('.env file found', envInfo.envPath);
+  for (const note of envLoad.repairs) warn(`.env: ${note}`);
 
   // Notepad's "Unicode" option writes UTF-16, which dotenv cannot read at all.
   // It's unambiguous and safe to repair, so just rewrite it as UTF-8.

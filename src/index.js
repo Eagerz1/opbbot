@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 dotenv.config({ quiet: true });
+import { loadEnv } from './lib/env.js';
 import { Client, GatewayIntentBits, Partials, Collection } from 'discord.js';
 import { readdirSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -9,20 +10,19 @@ import { BRAND } from './config/constants.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// Re-read .env tolerantly: recovers values dotenv drops (duplicate keys, a
+// value on the next line, .env.txt, UTF-16) and repairs the file in place.
+const env = loadEnv();
+for (const note of env.repairs) logger.warn(`.env: ${note}`);
+
 const token = process.env.DISCORD_TOKEN?.trim();
 if (!token) {
   logger.error('DISCORD_TOKEN is not set.');
-  // Explain *why* rather than just restating it - the usual causes are a
-  // .env saved as .env.txt, saved as UTF-16, or being in the wrong folder.
   try {
     const { diagnoseEnv, inspectKey } = await import('../scripts/env-doctor.js');
     const info = diagnoseEnv(process.cwd());
     if (!info.exists) {
-      const stray = info.strays[0];
-      if (stray) console.error(`\n  Your settings look like they're in "${stray.name}" instead of ".env".\n  Rename it to exactly ".env", or run:  npm run doctor\n`);
-      else console.error(`\n  No .env file in this folder:\n    ${process.cwd()}\n  Run:  npm run doctor   (it creates the file for you)\n`);
-    } else if (info.encoding?.startsWith('utf16')) {
-      console.error('\n  Your .env is saved as UTF-16, which cannot be read.\n  Run:  npm run doctor   (it converts the file automatically)\n');
+      console.error(`\n  No .env file in this folder:\n    ${process.cwd()}\n  Run:  npm run doctor   (it creates the file for you)\n`);
     } else {
       const d = inspectKey(info.raw ?? '', 'DISCORD_TOKEN');
       console.error(`\n  ${d.detail ?? 'DISCORD_TOKEN was not found in .env.'}\n  Run:  npm run doctor   for a full check.\n`);
