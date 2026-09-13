@@ -28,6 +28,34 @@ export const REQUIRED_PERMISSIONS = [
 ];
 
 /**
+ * Ask Discord which application a bot token belongs to.
+ *
+ * The token identifies the application, so CLIENT_ID is never something the
+ * user needs to go and find by hand.
+ *
+ * @param {string} token  the bot token
+ * @returns {Promise<string>} the application (client) ID
+ */
+export async function fetchApplicationId(token) {
+  if (!token) throw new Error('A bot token is required to look up the application ID');
+
+  const res = await fetch('https://discord.com/api/v10/oauth2/applications/@me', {
+    headers: { Authorization: `Bot ${token}` },
+  });
+
+  if (!res.ok) {
+    if (res.status === 401) {
+      throw new Error('Discord rejected the token (401). It may have been reset — get a new one from the Developer Portal → Bot → Reset Token.');
+    }
+    throw new Error(`Discord returned HTTP ${res.status} when looking up the application ID.`);
+  }
+
+  const app = await res.json();
+  if (!app?.id) throw new Error('Discord did not return an application ID.');
+  return app.id;
+}
+
+/**
  * @param {string} clientId  the application ID
  * @param {{admin?: boolean}} [opts]  admin:true (default) requests Administrator
  * @returns {string} the invite URL

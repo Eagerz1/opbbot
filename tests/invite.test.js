@@ -1,7 +1,7 @@
-import { test, describe } from 'node:test';
+import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { PermissionsBitField } from 'discord.js';
-import { buildInviteUrl, REQUIRED_PERMISSIONS } from '../src/lib/invite.js';
+import { buildInviteUrl, fetchApplicationId, REQUIRED_PERMISSIONS } from '../src/lib/invite.js';
 
 describe('buildInviteUrl', () => {
   const id = '123456789012345678';
@@ -44,5 +44,38 @@ describe('buildInviteUrl', () => {
   test('accepts a numeric id', () => {
     const url = new URL(buildInviteUrl(123456789012345678n));
     assert.equal(url.searchParams.get('client_id'), '123456789012345678');
+  });
+});
+
+describe('fetchApplicationId', () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  test('returns the application id and authenticates as a bot', async () => {
+    let seenAuth = null;
+    globalThis.fetch = async (url, opts) => {
+      seenAuth = opts.headers.Authorization;
+      assert.match(String(url), /oauth2\/applications\/@me$/);
+      return new Response(JSON.stringify({ id: '1548667002392940595' }), { status: 200 });
+    };
+    const id = await fetchApplicationId('my.tok.en');
+    assert.equal(id, '1548667002392940595');
+    assert.equal(seenAuth, 'Bot my.tok.en');
+  });
+
+  test('explains a 401 as a reset/invalid token', async () => {
+    globalThis.fetch = async () => new Response('', { status: 401 });
+    await assert.rejects(() => fetchApplicationId('bad'), /rejected the token \(401\)/);
+  });
+
+  test('surfaces other HTTP failures', async () => {
+    globalThis.fetch = async () => new Response('', { status: 503 });
+    await assert.rejects(() => fetchApplicationId('x'), /HTTP 503/);
+  });
+
+  test('requires a token', async () => {
+    await assert.rejects(() => fetchApplicationId(''), /token is required/);
   });
 });

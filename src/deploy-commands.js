@@ -11,20 +11,44 @@ dotenv.config({ quiet: true });
 import { loadEnv } from './lib/env.js';
 loadEnv();
 import { REST, Routes } from 'discord.js';
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { logger } from './lib/logger.js';
+import { fetchApplicationId } from './lib/invite.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const token = process.env.DISCORD_TOKEN;
-const clientId = process.env.CLIENT_ID;
-const guildId = process.env.GUILD_ID;
+const token = process.env.DISCORD_TOKEN?.trim();
+let clientId = process.env.CLIENT_ID?.trim();
+const guildId = process.env.GUILD_ID?.trim();
 
-if (!token || !clientId) {
-  logger.error('DISCORD_TOKEN and CLIENT_ID are required in .env');
+if (!token) {
+  logger.error('DISCORD_TOKEN is not set.');
+  console.error('\n  Set it with:  npm run set-token -- YOUR_TOKEN\n');
   process.exit(1);
+}
+
+// CLIENT_ID is derivable from the token, so don't make the user go find it.
+if (!clientId) {
+  try {
+    clientId = await fetchApplicationId(token);
+    logger.info(`CLIENT_ID was not set — looked it up from your token: ${clientId}`);
+
+    // Save it so every later run is instant and offline-safe.
+    const envPath = resolve(process.cwd(), '.env');
+    if (existsSync(envPath)) {
+      let text = readFileSync(envPath, 'utf8').replace(/^\uFEFF/, '');
+      const blank = /^([ \t]*(?:export[ \t]+)?CLIENT_ID[ \t]*[=:])[ \t]*$/m;
+      if (blank.test(text)) text = text.replace(blank, `$1${clientId}`);
+      else text += `${text.endsWith('\n') ? '' : '\n'}CLIENT_ID=${clientId}\n`;
+      writeFileSync(envPath, text, 'utf8');
+      logger.ok('Saved CLIENT_ID to .env');
+    }
+  } catch (err) {
+    logger.error(err.message);
+    process.exit(1);
+  }
 }
 
 const args = process.argv.slice(2);

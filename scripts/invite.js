@@ -10,7 +10,7 @@
 import dotenv from 'dotenv';
 dotenv.config({ quiet: true });
 import { loadEnv } from '../src/lib/env.js';
-import { buildInviteUrl, REQUIRED_PERMISSIONS } from '../src/lib/invite.js';
+import { buildInviteUrl, fetchApplicationId, REQUIRED_PERMISSIONS } from '../src/lib/invite.js';
 
 loadEnv();
 
@@ -33,23 +33,13 @@ if (!clientId) {
     process.exit(1);
   }
   try {
-    const res = await fetch('https://discord.com/api/v10/oauth2/applications/@me', {
-      headers: { Authorization: `Bot ${token}` },
-    });
-    if (!res.ok) {
-      console.error(red(`\n  Discord rejected the token (HTTP ${res.status}).`));
-      if (res.status === 401) {
-        console.error('  The token is invalid or has been reset.');
-        console.error('  Get a fresh one: Developer Portal \u2192 your app \u2192 Bot \u2192 Reset Token');
-        console.error('  Then:  npm run set-token -- YOUR_NEW_TOKEN\n');
-      }
-      process.exit(1);
-    }
-    const app = await res.json();
-    clientId = app.id;
+    clientId = await fetchApplicationId(token);
     console.log(dim(`\n  (looked up application ID from your token: ${clientId})`));
   } catch (err) {
-    console.error(red(`\n  Could not reach Discord: ${err.message}\n`));
+    console.error(red(`\n  ${err.message}\n`));
+    if (err.message.includes('401')) {
+      console.error('  Then:  npm run set-token -- YOUR_NEW_TOKEN\n');
+    }
     process.exit(1);
   }
 }
