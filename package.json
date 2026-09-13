@@ -15,7 +15,8 @@
     "test": "node --test --no-warnings tests/*.test.js",
     "doctor": "node --no-warnings scripts/doctor.js",
     "show-env": "node scripts/show-env.js",
-    "set-token": "node scripts/set-token.js"
+    "set-token": "node scripts/set-token.js",
+    "invite": "node scripts/invite.js"
   },
   "license": "MIT",
   "dependencies": {

@@ -130,6 +130,15 @@ All good. Next: npm run deploy then npm start
 
 ## 5. Invite the bot to your server
 
+```bash
+npm run invite
+```
+
+That prints your invite link. Open it, pick your server, authorise. Done.
+
+<details>
+<summary>Building the link by hand instead</summary>
+
 On the Developer Portal: **OAuth2 → URL Generator**
 
 - **Scopes:** `bot` and `applications.commands`
@@ -137,7 +146,9 @@ On the Developer Portal: **OAuth2 → URL Generator**
 
 Copy the URL at the bottom, open it, pick your server, authorise.
 
-> `Administrator` is the simple option because `/setup` creates roles and channels. If you'd rather be precise, the minimum is: Manage Roles, Manage Channels, View Channels, Send Messages, Embed Links, Attach Files, Read Message History, Mention Everyone, Add Reactions, Manage Messages.
+</details>
+
+> `Administrator` is the simple option because `/setup` creates roles and channels. For the narrower set instead: `npm run invite -- --minimal`.
 
 ### ⚠️ The one step people miss
 
