@@ -118,4 +118,31 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 logger.info(`Starting ${BRAND.name}…`);
 await loadCommands();
 await loadEvents();
-await client.login(token);
+
+try {
+  await client.login(token);
+} catch (err) {
+  const code = err?.code ?? '';
+  const msg = String(err?.message ?? err);
+
+  if (code === 'DisallowedIntents' || /disallowed intents/i.test(msg)) {
+    logger.error('Discord refused the connection: privileged intents are not enabled.');
+    console.error('\n  This bot needs two switches turned on before it can log in.\n');
+    console.error('  1. Open  https://discord.com/developers/applications');
+    console.error('  2. Pick your app  →  Bot  (left sidebar)');
+    console.error('  3. Scroll to  Privileged Gateway Intents  and enable BOTH:\n');
+    console.error('        SERVER MEMBERS INTENT');
+    console.error('        MESSAGE CONTENT INTENT\n');
+    console.error('  4. Click  Save Changes,  then run  npm start  again.\n');
+    console.error('  (Members is needed to grant reward roles; Message Content to award chat XP.)\n');
+  } else if (code === 'TokenInvalid' || /invalid token/i.test(msg)) {
+    logger.error('Discord rejected the token.');
+    console.error('\n  The token is wrong or has been reset since you copied it.\n');
+    console.error('  Get a fresh one: Developer Portal → your app → Bot → Reset Token');
+    console.error('  Then:  npm run set-token -- YOUR_NEW_TOKEN\n');
+  } else {
+    logger.error('Could not log in to Discord:', msg);
+    console.error('\n  Check your internet connection, then try  npm start  again.\n');
+  }
+  process.exit(1);
+}

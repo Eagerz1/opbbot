@@ -232,6 +232,7 @@ Your `.env` and `data/` are untouched by `git pull`.
 
 | Symptom | Cause & fix |
 |---|---|
+| **A slash command says "The application did not respond"** | The bot process is not running, or it crashed on login. Look at the window running `npm start`. The usual cause is the two **Privileged Gateway Intents** (Server Members, Message Content) not being enabled — Developer Portal → your app → Bot → enable both → Save Changes → `npm start`. `npm run doctor` now checks this for you. |
 | **"DISCORD_TOKEN is not set" but I did fill it in** | Run `npm run doctor` — it pinpoints the cause and fixes most of them for you. Usual suspects: the file is really `.env.txt` (Notepad added it, Windows hides it), it was saved as UTF-16, the value ended up on the line *below* `DISCORD_TOKEN=`, the `#` was left at the start of the line, or you're running npm from a different folder. |
 | `'cp' is not recognized...` | `cp` is a Mac/Linux command. On Windows CMD use `copy .env.example .env`, or just run `npm run doctor` and it makes the file for you. |
 | `'https:' is not recognized...` | The whole `git clone ...` line is one command — paste it in one go, don't split it across two lines. |

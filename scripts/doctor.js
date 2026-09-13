@@ -199,6 +199,38 @@ if (token && token.split('.').length === 3) {
   } catch (err) {
     warn('Could not reach Discord', `${err.message}. Check your internet connection or firewall.`);
   }
+
+  // Privileged intents must be enabled or login fails outright, which shows up
+  // in Discord as "the application did not respond".
+  try {
+    const res = await fetch('https://discord.com/api/v10/oauth2/applications/@me', {
+      headers: { Authorization: `Bot ${token}` },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (res.ok) {
+      const app = await res.json();
+      const FLAG_MEMBERS = 1 << 14; // GATEWAY_GUILD_MEMBERS
+      const FLAG_MEMBERS_LIMITED = 1 << 15;
+      const FLAG_MESSAGES = 1 << 18; // GATEWAY_MESSAGE_CONTENT
+      const FLAG_MESSAGES_LIMITED = 1 << 19;
+      const flags = app.flags ?? 0;
+
+      const members = Boolean(flags & (FLAG_MEMBERS | FLAG_MEMBERS_LIMITED));
+      const messages = Boolean(flags & (FLAG_MESSAGES | FLAG_MESSAGES_LIMITED));
+
+      if (members && messages) {
+        ok('Privileged intents enabled', 'Server Members + Message Content');
+      } else {
+        const missing = [!members && 'SERVER MEMBERS INTENT', !messages && 'MESSAGE CONTENT INTENT'].filter(Boolean);
+        bad(
+          `Privileged intent(s) not enabled: ${missing.join(' and ')}`,
+          'Developer Portal → your app → Bot → Privileged Gateway Intents → enable, then Save Changes. Without this the bot cannot log in, and Discord shows "the application did not respond".'
+        );
+      }
+    }
+  } catch {
+    /* already warned about connectivity above */
+  }
 }
 
 /* ------------------------------ summary ----------------------------- */

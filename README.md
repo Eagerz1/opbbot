@@ -253,6 +253,7 @@ Run **`npm run doctor`** first — it checks your Node version, dependencies, `.
 
 | Problem | Fix |
 |---|---|
+| A slash command says "The application did not respond" | The bot is not running or crashed at login — check the `npm start` window. Usually the **Privileged Gateway Intents** (Server Members, Message Content) are off: Developer Portal → Bot → enable both → Save Changes. `npm run doctor` checks this. |
 | "DISCORD_TOKEN is not set" but you did set it | `npm run doctor` — it finds the real cause (`.env.txt`, UTF-16 encoding, value on the wrong line, still commented out) and repairs most of them automatically. |
 | `npm install` fails with `node-gyp` errors | You're on Node < 22.5. Upgrade to Node 22 LTS, delete `node_modules`, install again. |
 | Commands don't appear | Run `npm run deploy`. Set `GUILD_ID` in `.env` for instant registration; global takes up to an hour. |
