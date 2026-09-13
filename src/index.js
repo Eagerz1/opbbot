@@ -18,14 +18,39 @@ for (const note of env.repairs) logger.warn(`.env: ${note}`);
 const token = process.env.DISCORD_TOKEN?.trim();
 if (!token) {
   logger.error('DISCORD_TOKEN is not set.');
+  // The loader above already searched every .env-ish file in the folder and
+  // found no usable token anywhere, so show exactly what IS here rather than
+  // pointing at a line number in a file that may not be the one being edited.
   try {
-    const { diagnoseEnv, inspectKey } = await import('../scripts/env-doctor.js');
-    const info = diagnoseEnv(process.cwd());
-    if (!info.exists) {
-      console.error(`\n  No .env file in this folder:\n    ${process.cwd()}\n  Run:  npm run doctor   (it creates the file for you)\n`);
+    const { readdirSync, statSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const here = process.cwd();
+    const files = readdirSync(here).filter((f) => {
+      const l = f.toLowerCase();
+      return l === 'env' || l.startsWith('.env') || l.startsWith('env.') || l.startsWith('env ');
+    });
+
+    console.error(`\n  Looked in: ${here}`);
+    if (files.length === 0) {
+      console.error('\n  There is no .env file here at all.');
+      console.error('  Run:  npm run doctor    (it creates one for you)\n');
     } else {
-      const d = inspectKey(info.raw ?? '', 'DISCORD_TOKEN');
-      console.error(`\n  ${d.detail ?? 'DISCORD_TOKEN was not found in .env.'}\n  Run:  npm run doctor   for a full check.\n`);
+      console.error('\n  Config files found here:');
+      for (const f of files) {
+        let size = 0;
+        try {
+          size = statSync(join(here, f)).size;
+        } catch {
+          /* ignore */
+        }
+        const note = f.toLowerCase() === '.env.example' ? '  (template — do not edit)' : '';
+        console.error(`    ${f}  (${size} bytes)${note}`);
+      }
+      console.error('\n  None of them contain a usable DISCORD_TOKEN.');
+      console.error('  The token line must look like this, all on ONE line:');
+      console.error('\n    DISCORD_TOKEN=MTIzNDU2Nzg5MDEyMzQ1Njc4.GxYzAb.aBcDeF-gHiJkL\n');
+      console.error('  Get a fresh one: Discord Developer Portal → your app → Bot → Reset Token.');
+      console.error('  Then run:  npm run doctor\n');
     }
   } catch {
     console.error('\n  Run:  npm run doctor\n');

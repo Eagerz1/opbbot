@@ -107,7 +107,10 @@ if (!envInfo.exists) {
 
   // An extra .env.txt lying around usually means they edited the wrong file.
   for (const stray of envInfo.strays) {
-    warn(`There's also a file called "${stray.name}"`, 'Only ".env" is read. If you edited that one by mistake, copy your values into ".env".');
+    warn(
+      `There's also a file called "${stray.name}"`,
+      'Any values in it have already been copied into ".env". You can delete the extra file.'
+    );
   }
 }
 

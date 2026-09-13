@@ -182,12 +182,81 @@ describe('loadEnv', () => {
     assert.equal(process.env.DISCORD_TOKEN, undefined);
   });
 
-  test('does not adopt .env.example as the config file', () => {
+  test('never renames .env.example away, but does use values typed into it', () => {
     write('.env.example', 'DISCORD_TOKEN=MTIzNDU2.GaBcDe.realtoken\n');
+    loadEnv({ dir });
+    // the template must survive - it is tracked in git
+    assert.ok(existsSync(join(dir, '.env.example')), '.env.example must not be renamed');
+    // ...but a token typed into it should still start the bot
+    assert.equal(process.env.DISCORD_TOKEN, 'MTIzNDU2.GaBcDe.realtoken');
+  });
+
+  test('ignores an untouched .env.example (placeholders only)', () => {
+    write('.env.example', 'DISCORD_TOKEN=\nCLIENT_ID=your_application_id_here\n');
     const r = loadEnv({ dir });
     assert.equal(r.path, null);
     assert.equal(process.env.DISCORD_TOKEN, undefined);
-    assert.ok(existsSync(join(dir, '.env.example')));
+    assert.equal(process.env.CLIENT_ID, undefined);
+  });
+
+  test('THE REPORTED BUG: blank .env created by doctor + filled-in .env.txt', () => {
+    // doctor copies the template to .env, leaving DISCORD_TOKEN= blank on L16;
+    // the user's real values are in .env.txt because Notepad appended .txt
+    write('.env', '# template\n\nDISCORD_TOKEN=\nCLIENT_ID=\nGUILD_ID=\n');
+    write(
+      '.env.txt',
+      'DISCORD_TOKEN=MTIzNDU2.GaBcDe.realtoken\nCLIENT_ID=123456789012345678\nGUILD_ID=987654321098765432\n'
+    );
+    const r = loadEnv({ dir });
+    assert.equal(process.env.DISCORD_TOKEN, 'MTIzNDU2.GaBcDe.realtoken');
+    assert.equal(process.env.CLIENT_ID, '123456789012345678');
+    assert.equal(process.env.GUILD_ID, '987654321098765432');
+    assert.ok(r.repairs.length > 0);
+    // the blank lines in .env should now hold the real values
+    const onDisk = readFileSync(join(dir, '.env'), 'utf8');
+    assert.match(onDisk, /DISCORD_TOKEN=MTIzNDU2\.GaBcDe\.realtoken/);
+    assert.match(onDisk, /CLIENT_ID=123456789012345678/);
+  });
+
+  test('a partially-filled .env is topped up from the stray file', () => {
+    write('.env', 'DISCORD_TOKEN=MTIzNDU2.GaBcDe.realtoken\nCLIENT_ID=\nGUILD_ID=\n');
+    write('.env.txt', 'CLIENT_ID=123456789012345678\nGUILD_ID=987654321098765432\n');
+    loadEnv({ dir });
+    assert.equal(process.env.DISCORD_TOKEN, 'MTIzNDU2.GaBcDe.realtoken');
+    assert.equal(process.env.CLIENT_ID, '123456789012345678');
+    assert.equal(process.env.GUILD_ID, '987654321098765432');
+  });
+
+  test('a complete .env is never overwritten by a stale stray file', () => {
+    write('.env', 'DISCORD_TOKEN=current.tok.en\nCLIENT_ID=111111111111111111\nGUILD_ID=222222222222222222\n');
+    write('.env.txt', 'DISCORD_TOKEN=old.tok.en\nCLIENT_ID=999999999999999999\nGUILD_ID=888888888888888888\n');
+    loadEnv({ dir });
+    assert.equal(process.env.DISCORD_TOKEN, 'current.tok.en');
+    assert.equal(process.env.CLIENT_ID, '111111111111111111');
+    assert.ok(existsSync(join(dir, '.env.txt')), 'stray left alone when .env is complete');
+  });
+
+  test('finds values in oddly-named copies like "env - Copy.txt"', () => {
+    write('.env', 'DISCORD_TOKEN=\n');
+    write('env - Copy.txt', 'DISCORD_TOKEN=MTIzNDU2.GaBcDe.realtoken\n');
+    loadEnv({ dir });
+    assert.equal(process.env.DISCORD_TOKEN, 'MTIzNDU2.GaBcDe.realtoken');
+  });
+
+  test('picks the stray file with the most real values', () => {
+    write('.env', 'DISCORD_TOKEN=\nCLIENT_ID=\nGUILD_ID=\n');
+    write('.env.bak', 'DISCORD_TOKEN=only.a.token\n');
+    write('.env.txt', 'DISCORD_TOKEN=MTIzNDU2.GaBcDe.realtoken\nCLIENT_ID=123456789012345678\nGUILD_ID=987654321098765432\n');
+    loadEnv({ dir });
+    assert.equal(process.env.DISCORD_TOKEN, 'MTIzNDU2.GaBcDe.realtoken');
+    assert.equal(process.env.GUILD_ID, '987654321098765432');
+  });
+
+  test('reads a UTF-16 stray file (Notepad Unicode + .txt, both traps at once)', () => {
+    write('.env', 'DISCORD_TOKEN=\n');
+    write('.env.txt', 'DISCORD_TOKEN=MTIzNDU2.GaBcDe.realtoken\n', 'utf16le');
+    loadEnv({ dir });
+    assert.equal(process.env.DISCORD_TOKEN, 'MTIzNDU2.GaBcDe.realtoken');
   });
 
   test('repair:false still reads a stray file without renaming it', () => {

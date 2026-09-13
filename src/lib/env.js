@@ -121,28 +121,61 @@ function findStray(dir) {
   try {
     for (const entry of readdirSync(dir)) {
       const lower = entry.toLowerCase();
-      if (entry === '.env' || entry === '.env.example') continue;
-      if (lower === 'env' || lower === 'env.txt' || lower.startsWith('.env')) {
+      if (entry === '.env') continue; // handled separately as the canonical file
+      // .env.txt, env.txt, env, .ENV, .env.local, .env.bak, "env - Copy.txt",
+      // and .env.example (only ever used if it has real values typed into it)
+      if (lower === 'env' || lower.startsWith('env.') || lower.startsWith('env ') || lower.startsWith('.env')) {
         const p = join(dir, entry);
-        if (statSync(p).isFile()) candidates.push({ name: entry, path: p });
+        try {
+          if (statSync(p).isFile()) {
+            // .env.example is tracked in git - we may read values a user typed
+            // into it by mistake, but must never rename or delete it.
+            candidates.push({ name: entry, path: p, score: scoreFile(p), keep: lower === '.env.example' });
+          }
+        } catch {
+          /* unreadable - skip */
+        }
       }
     }
   } catch {
     /* ignore */
   }
-  // Prefer one that actually contains a token.
-  candidates.sort((a, b) => scoreFile(b.path) - scoreFile(a.path));
-  return candidates[0] ?? null;
+  // Most real values first.
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates;
 }
 
+/** How many of the important values a file actually supplies. */
 function scoreFile(path) {
   try {
     const { text } = decode(readFileSync(path));
     const parsed = parseEnvText(text);
-    return (parsed.DISCORD_TOKEN ? 2 : 0) + (parsed.CLIENT_ID ? 1 : 0);
+    return (parsed.DISCORD_TOKEN ? 2 : 0) + (parsed.CLIENT_ID ? 1 : 0) + (parsed.GUILD_ID ? 1 : 0);
   } catch {
     return 0;
   }
+}
+
+/**
+ * Write values into an existing .env, filling its blank `KEY=` lines so the
+ * file ends up genuinely correct rather than us papering over it every boot.
+ */
+function mergeIntoEnv(text, values) {
+  let out = text;
+  const added = [];
+  for (const [key, value] of Object.entries(values)) {
+    const blank = new RegExp(`^([ \\t]*(?:export[ \\t]+)?${key}[ \\t]*[=:])[ \\t]*$`, 'm');
+    if (blank.test(out)) {
+      out = out.replace(blank, `$1${value}`);
+    } else if (!new RegExp(`^[ \\t]*(?:export[ \\t]+)?${key}[ \\t]*[=:]`, 'm').test(out)) {
+      if (!out.endsWith('\n')) out += '\n';
+      out += `${key}=${value}\n`;
+    } else {
+      continue; // already has a real value
+    }
+    added.push(key);
+  }
+  return { text: out, added };
 }
 
 /**
@@ -151,37 +184,78 @@ function scoreFile(path) {
  */
 export function loadEnv({ dir = process.cwd(), repair = true } = {}) {
   const repairs = [];
-  let path = resolve(dir, '.env');
+  const path = resolve(dir, '.env');
+  const exists = existsSync(path);
 
-  // 1. Wrong filename (.env.txt etc.)
-  if (!existsSync(path)) {
-    const stray = findStray(dir);
-    if (stray && scoreFile(stray.path) > 0) {
-      if (repair) {
-        try {
-          renameSync(stray.path, path);
-          repairs.push(`renamed "${stray.name}" to ".env" (Windows hides file extensions, so Notepad likely saved it as a .txt)`);
-        } catch {
-          path = stray.path; // can't rename - read it where it is
-          repairs.push(`reading your settings from "${stray.name}"; rename it to ".env" when you can`);
+  // 1. Read .env (if any) and see what it actually supplies.
+  let text = '';
+  let encoding = 'utf8';
+  if (exists) {
+    try {
+      const decoded = decode(readFileSync(path));
+      text = decoded.text;
+      encoding = decoded.encoding;
+    } catch {
+      /* unreadable - treat as empty */
+    }
+  }
+  let parsed = parseEnvText(text);
+
+  // 2. If .env is missing or still blank for the keys that matter, look at the
+  //    neighbouring files. This is the common Windows case: `npm run doctor`
+  //    creates a blank .env from the template while the values the user typed
+  //    are sitting in ".env.txt" - Notepad appends .txt and Explorer hides it.
+  const needed = ['DISCORD_TOKEN', 'CLIENT_ID', 'GUILD_ID'];
+  const missing = needed.filter((k) => !parsed[k]);
+
+  if (missing.length > 0) {
+    const better = findStray(dir).find((c) => c.score > 0 && missing.some((k) => !parsed[k]));
+
+    if (better) {
+      const { text: strayText } = decode(readFileSync(better.path));
+      const strayValues = parseEnvText(strayText);
+      const fill = {};
+      for (const [k, v] of Object.entries(strayValues)) if (!parsed[k]) fill[k] = v;
+
+      if (Object.keys(fill).length > 0) {
+        if (!exists && repair && !better.keep) {
+          // No real .env at all - just promote the file wholesale.
+          try {
+            renameSync(better.path, path);
+            text = strayText;
+            encoding = 'utf8';
+            repairs.push(`your settings were in "${better.name}" — renamed it to ".env" (Windows hides file extensions, so Notepad saved it as a .txt)`);
+          } catch {
+            text = strayText;
+            repairs.push(`reading your settings from "${better.name}"`);
+          }
+        } else if (repair) {
+          // A .env exists but is blank/partial - copy the values into it.
+          const merged = mergeIntoEnv(text || '', fill);
+          try {
+            writeFileSync(path, merged.text, 'utf8');
+            text = merged.text;
+            encoding = 'utf8';
+            repairs.push(
+              better.keep
+                ? `your values were typed into "${better.name}" instead of ".env" — copied ${merged.added.join(', ')} into .env`
+                : `your .env was blank but "${better.name}" had your ${merged.added.join(', ')} — copied ${merged.added.length > 1 ? 'them' : 'it'} into .env`
+            );
+          } catch {
+            text = merged.text;
+            repairs.push(`using the values from "${better.name}"`);
+          }
+        } else {
+          text = mergeIntoEnv(text || '', fill).text;
         }
-      } else {
-        path = stray.path;
+        parsed = parseEnvText(text);
       }
-    } else {
-      return { loaded: [], repairs, path: null };
     }
   }
 
-  // 2. Read + decode
-  let buf;
-  try {
-    buf = readFileSync(path);
-  } catch {
-    return { loaded: [], repairs, path: null };
-  }
-  const { text, encoding } = decode(buf);
+  if (!exists && text === '') return { loaded: [], repairs, path: null };
 
+  // 3. Notepad's "Unicode" encoding produces a file nothing can read.
   if (encoding !== 'utf8' && repair) {
     try {
       writeFileSync(path, text, 'utf8');
@@ -191,8 +265,7 @@ export function loadEnv({ dir = process.cwd(), repair = true } = {}) {
     }
   }
 
-  // 3. Parse, first usable value wins
-  const parsed = parseEnvText(text);
+  // 4. Apply to the process. Anything already in the real environment wins.
   const loaded = [];
   for (const [key, value] of Object.entries(parsed)) {
     if (process.env[key] !== undefined && process.env[key] !== '') continue; // real env wins
@@ -200,7 +273,7 @@ export function loadEnv({ dir = process.cwd(), repair = true } = {}) {
     if (KEYS.includes(key)) loaded.push(key);
   }
 
-  // 4. Tell the user if the file has a duplicate key that would have broken it
+  // 5. Note duplicate keys that would otherwise have silently won.
   for (const key of KEYS) {
     const assignments = [...text.matchAll(new RegExp(`^\\s*(?:export\\s+)?${key}\\s*[=:](.*)$`, 'gm'))].map((m) => m[1]);
     if (assignments.length > 1 && parsed[key]) {
