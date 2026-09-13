@@ -1,7 +1,7 @@
 import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { PermissionsBitField } from 'discord.js';
-import { buildInviteUrl, fetchApplicationId, REQUIRED_PERMISSIONS } from '../src/lib/invite.js';
+import { buildInviteUrl, fetchApplicationId, fetchBotGuilds, REQUIRED_PERMISSIONS } from '../src/lib/invite.js';
 
 describe('buildInviteUrl', () => {
   const id = '123456789012345678';
@@ -77,5 +77,35 @@ describe('fetchApplicationId', () => {
 
   test('requires a token', async () => {
     await assert.rejects(() => fetchApplicationId(''), /token is required/);
+  });
+});
+
+describe('fetchBotGuilds', () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  test('returns id and name for each server', async () => {
+    globalThis.fetch = async (url, opts) => {
+      assert.match(String(url), /users\/@me\/guilds$/);
+      assert.equal(opts.headers.Authorization, 'Bot my.tok.en');
+      return new Response(JSON.stringify([{ id: '1', name: 'OPB', icon: null, extra: 'ignored' }]), { status: 200 });
+    };
+    assert.deepEqual(await fetchBotGuilds('my.tok.en'), [{ id: '1', name: 'OPB' }]);
+  });
+
+  test('returns an empty list when the bot is in no servers', async () => {
+    globalThis.fetch = async () => new Response('[]', { status: 200 });
+    assert.deepEqual(await fetchBotGuilds('x'), []);
+  });
+
+  test('explains a 401', async () => {
+    globalThis.fetch = async () => new Response('', { status: 401 });
+    await assert.rejects(() => fetchBotGuilds('bad'), /rejected the token \(401\)/);
+  });
+
+  test('requires a token', async () => {
+    await assert.rejects(() => fetchBotGuilds(''), /token is required/);
   });
 });

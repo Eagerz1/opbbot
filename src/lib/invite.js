@@ -56,6 +56,33 @@ export async function fetchApplicationId(token) {
 }
 
 /**
+ * List the servers this bot is currently in.
+ *
+ * Used to register slash commands against the actual server instead of
+ * globally - guild commands appear instantly, global ones take up to an hour.
+ *
+ * @param {string} token  the bot token
+ * @returns {Promise<Array<{id: string, name: string}>>}
+ */
+export async function fetchBotGuilds(token) {
+  if (!token) throw new Error('A bot token is required to list servers');
+
+  const res = await fetch('https://discord.com/api/v10/users/@me/guilds', {
+    headers: { Authorization: `Bot ${token}` },
+  });
+
+  if (!res.ok) {
+    if (res.status === 401) {
+      throw new Error('Discord rejected the token (401). It may have been reset — get a new one from the Developer Portal → Bot → Reset Token.');
+    }
+    throw new Error(`Discord returned HTTP ${res.status} when listing servers.`);
+  }
+
+  const guilds = await res.json();
+  return Array.isArray(guilds) ? guilds.map((g) => ({ id: g.id, name: g.name })) : [];
+}
+
+/**
  * @param {string} clientId  the application ID
  * @param {{admin?: boolean}} [opts]  admin:true (default) requests Administrator
  * @returns {string} the invite URL
