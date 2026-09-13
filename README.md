@@ -150,15 +150,17 @@ Give the role to anyone who pays for prizes:
 
 ## Patreon tiers
 
-| Tier | Price | Entries | XP |
-|---|---|---|---|
-| 💗 Patron | $3/mo | +1 | 1.1× |
-| 💖 Patron + | $5/mo | +2 | 1.25× |
-| 💝 Patron ++ | $10/mo | +3 | 1.5× |
-| 💜 Patron +++ | $25/mo | +5 | 1.75× |
-| 👑 Patron ++++ | $50/mo | +8 | 2× |
+Tiers are earned by **how many giveaways you have funded**, not by a subscription.
 
-Grant with `/patreon grant user:@someone tier:...` — it clears any existing tier first, so nobody ends up holding two. Prices and perks live in `src/config/blueprint.js` (`PATRON_TIERS`); edit them there and every embed updates itself.
+| Tier | Earned at | Entries | XP |
+|---|---|---|---|
+| 💗 Patron | 1 giveaway funded | +1 | 1.1× |
+| 💖 Patron + | 3 giveaways funded | +2 | 1.2× |
+| 💝 Patron ++ | 5 giveaways funded | +3 | 1.3× |
+| 💜 Patron +++ | 10 giveaways funded | +5 | 1.4× |
+| 👑 Patron ++++ | 20 giveaways funded | +8 | 1.5× |
+
+Grant with `/patreon grant user:@someone tier:...` — it clears any existing tier first, so nobody ends up holding two. Thresholds and perks live in `src/config/blueprint.js` (`PATRON_TIERS`); edit them there and every embed updates itself.
 
 Using the official Patreon–Discord integration instead? Just point each Patreon tier at the matching role and skip `/patreon grant`.
 
@@ -168,17 +170,19 @@ Members earn **15–25 XP** per message, once a minute. Info, staff and giveaway
 
 | Role | Unlocks at | Entries | XP | Extra |
 |---|---|---|---|---|
-| 🗨️ Chat Lvl 5 | level 5 | +1 | 1.05× | Embed links, external emoji |
-| 💬 Chat Lvl 10 | level 10 | +2 | 1.1× | Attach files |
-| 🔊 Chat Lvl 25 | level 25 | +3 | 1.2× | Threads + soundboard |
-| 🔥 Chat Lvl 50 | level 50 | +5 | 1.35× | Hoisted in member list |
+| 🗨️ Chat Lvl 5 | level 5 | +1 | 1.1× | Embed links, external emoji |
+| 💬 Chat Lvl 10 | level 10 | +2 | 1.2× | Attach files |
+| 🔊 Chat Lvl 25 | level 25 | +3 | 1.3× | Threads + soundboard |
+| 🔥 Chat Lvl 50 | level 50 | +5 | 1.4× | Hoisted in member list |
 | 🌟 Chat Lvl 100 | level 100 | +8 | 1.5× | Change own nickname |
+
+Multipliers stay inside a deliberate **1.1× – 1.5×** band. In a small community a 2× rate lets one heavy chatter dominate every draw.
 
 Roles are granted **automatically** on level-up and announced in `🎊│level-ups`.
 
 ### How buffs stack
 
-Base **1 entry** + your highest Patron tier + your highest Chat Level role → **up to 17 entries**. XP multipliers multiply (up to **3×**). `/rank` shows a member their exact numbers.
+Base **1 entry** + your highest Patron tier + your highest Chat Level role → **up to 17 entries**. XP multipliers multiply (up to **2.25×**). `/rank` shows a member their exact numbers.
 
 ---
 

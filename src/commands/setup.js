@@ -20,26 +20,38 @@ export const data = new SlashCommandBuilder()
       ),
   )
   .addBooleanOption((o) => o.setName('preview').setDescription('Show exactly what would be created without touching the server'))
-  .addBooleanOption((o) => o.setName('panels').setDescription('Post the info/rules/patreon/rewards embeds (default: true)'));
+  .addBooleanOption((o) => o.setName('panels').setDescription('Post the info/rules/patreon/rewards embeds (default: true)'))
+  .addBooleanOption((o) =>
+    o.setName('clean').setDescription('DELETE every existing channel first, then build fresh (cannot be undone)'),
+  );
 
 export async function execute(interaction) {
   const separator = interaction.options.getString('separator') ?? SEPARATORS.bar;
   const dryRun = interaction.options.getBoolean('preview') ?? false;
   const postPanels = interaction.options.getBoolean('panels') ?? true;
+  const clean = interaction.options.getBoolean('clean') ?? false;
   const plan = countPlan();
 
   if (dryRun) {
-    await interaction.reply({ embeds: [planEmbed(separator, plan)], flags: MessageFlags.Ephemeral });
+    await interaction.reply({ embeds: [planEmbed(separator, plan, clean)], flags: MessageFlags.Ephemeral });
     return;
   }
+
+  const existingCount = clean ? interaction.guild.channels.cache.size : 0;
 
   await interaction.reply({
     embeds: [
       new EmbedBuilder()
-        .setColor(COLORS.primary)
+        .setColor(clean ? COLORS.warning : COLORS.primary)
         .setTitle(`${EMOJI.gift} Building ${BRAND.name}…`)
         .setDescription(
-          `Creating **${plan.roles} roles**, **${plan.categories} categories** and **${plan.channels} channels**.\nThis takes about 30–60 seconds — Discord rate limits channel creation.`,
+          [
+            clean ? `**Deleting ${existingCount} existing channel(s)** first.` : null,
+            `Creating **${plan.roles} roles**, **${plan.categories} categories** and **${plan.channels} channels**.`,
+            'This takes about 30–60 seconds — Discord rate limits channel creation.',
+          ]
+            .filter(Boolean)
+            .join('\n'),
         )
         .setFooter({ text: BRAND.footer }),
     ],
@@ -51,6 +63,8 @@ export async function execute(interaction) {
     report = await runSetup(interaction.guild, {
       separator,
       postPanels,
+      clean,
+      invokedChannelId: interaction.channelId,
       actorId: interaction.user.id,
       onProgress: (msg) => progress.push(msg),
     });
@@ -70,6 +84,7 @@ export async function execute(interaction) {
     .setTitle(`${EMOJI.check} ${BRAND.name} is ready`)
     .setDescription(
       [
+        report.deleted?.channels.length ? `_Deleted ${report.deleted.channels.length} old channel(s) first._` : '',
         `**${s.roles}** roles · **${s.categories}** categories · **${s.channels}** channels · **${s.panels}** panels posted`,
         report.roles.adopted.length || report.channels.adopted.length
           ? `_Reused ${report.roles.adopted.length} existing role(s) and ${report.channels.adopted.length} existing channel(s)._`
@@ -125,11 +140,18 @@ export async function execute(interaction) {
   await interaction.editReply({ embeds: [embed] });
 }
 
-function planEmbed(separator, plan) {
+function planEmbed(separator, plan, clean = false) {
   const embed = new EmbedBuilder()
     .setColor(COLORS.info)
     .setTitle(`${EMOJI.gift} Setup Preview — nothing was created`)
-    .setDescription(`**${plan.roles}** roles · **${plan.categories}** categories · **${plan.channels}** channels (${plan.text} text, ${plan.voice} voice)`)
+    .setDescription(
+      [
+        clean ? '\u26a0\ufe0f **clean:true** — every existing channel would be **deleted** first.' : null,
+        `**${plan.roles}** roles \u00b7 **${plan.categories}** categories \u00b7 **${plan.channels}** channels (${plan.text} text, ${plan.voice} voice)`,
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    )
     .setFooter({ text: `${BRAND.footer} · run /setup without preview to build it` });
 
   for (const cat of CATEGORIES) {

@@ -18,7 +18,7 @@ export const data = new SlashCommandBuilder()
           .setName('tier')
           .setDescription('Which tier')
           .setRequired(true)
-          .addChoices(...PATRON_TIERS.map((t) => ({ name: `${t.name} (${t.price}/mo)`, value: t.tier }))),
+          .addChoices(...PATRON_TIERS.map((t) => ({ name: `${t.name} (${t.requirement})`, value: t.tier }))),
       ),
   )
   .addSubcommand((s) =>

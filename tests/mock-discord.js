@@ -61,6 +61,11 @@ class MockChannel {
   isTextBased() {
     return this.type === ChannelType.GuildText || this.type === ChannelType.GuildAnnouncement;
   }
+  async delete() {
+    this.guild.channelsCache.delete(this.id);
+    this.deleted = true;
+    return this;
+  }
   get messages() {
     return {
       fetch: async () => {

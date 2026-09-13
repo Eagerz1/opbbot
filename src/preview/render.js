@@ -178,7 +178,7 @@ export function renderPage() {
   const tierTable = PATRON_TIERS.map(
     (t) => `<tr>
       <td><span class="dot" style="background:${hex(t.color)}"></span> ${esc(t.name)}</td>
-      <td>${esc(t.price)}/mo</td>
+      <td>${esc(t.requirement)}</td>
       <td class="num">+${t.entryBonus}</td>
       <td class="num">${t.xpMultiplier}×</td>
     </tr>`,
@@ -376,7 +376,7 @@ export function renderPage() {
         </div>
         <p style="color:var(--muted);font-size:13px;margin-top:14px">
           Bonuses <strong>stack</strong>: base 1 + highest patron tier + highest chat role =
-          <strong>up to 17 entries</strong>. XP multipliers multiply (up to 3×).
+          <strong>up to 17 entries</strong>. XP multipliers multiply (up to 2.25×).
         </p>
       </div>
 

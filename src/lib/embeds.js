@@ -62,13 +62,24 @@ export function faqEmbed(ctx = {}) {
 }
 
 export function rolesPanelEmbed(ctx = {}) {
+  // Discord does NOT render <@&id> inside a field *name* - it shows the raw
+  // text. Mentions only resolve in the description and in field values, so
+  // the whole list lives in the description.
   return base(COLORS.primary)
     .setTitle(`${EMOJI.sparkles} Self-Assignable Roles`)
-    .setDescription('Pick up the roles you want. Staff can wire these to a reaction-role menu.')
-    .addFields(
-      { name: `${mention(ctx.roles?.giveawayPing)}`, value: 'Get pinged every time a new giveaway goes live.', inline: false },
-      { name: `${mention(ctx.roles?.member)}`, value: 'Default role, granted once you accept the rules.', inline: false },
-      { name: `${mention(ctx.roles?.giveawayFunder)}`, value: `Want to fund a prize? Ask staff — unlocks ${chan(ctx.channels?.createGiveaway)}.`, inline: false },
+    .setDescription(
+      [
+        'Pick up the roles you want. Staff can wire these to a reaction-role menu.',
+        '',
+        `${mention(ctx.roles?.giveawayPing)}`,
+        'Get pinged every time a new giveaway goes live.',
+        '',
+        `${mention(ctx.roles?.member)}`,
+        'Default role, granted once you accept the rules.',
+        '',
+        `${mention(ctx.roles?.giveawayFunder)}`,
+        `Fund a prize and you get this role — it unlocks ${chan(ctx.channels?.createGiveaway)} and starts you on the Patron ladder.`,
+      ].join('\n'),
     );
 }
 
@@ -141,7 +152,7 @@ export function patreonEmbed(ctx = {}) {
   for (const t of PATRON_TIERS) {
     const roleId = ctx.roles?.[t.key];
     embed.addFields({
-      name: `${t.name} — ${t.price}/mo`,
+      name: `${t.name} — ${t.requirement}`,
       value: [
         roleId ? `Role: <@&${roleId}>` : null,
         `**+${t.entryBonus} entries** · **${t.xpMultiplier}× XP**`,

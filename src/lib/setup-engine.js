@@ -46,12 +46,14 @@ export async function runSetup(guild, opts = {}) {
     actorId = null,
     postPanels = true,
     skipExisting = true,
+    clean = false,
   } = opts;
 
   const report = {
     roles: { created: [], adopted: [], failed: [] },
     categories: { created: [], adopted: [], failed: [] },
     channels: { created: [], adopted: [], failed: [] },
+    deleted: { channels: [], failed: [] },
     panels: { posted: [], failed: [] },
     warnings: [],
     dryRun,
@@ -60,6 +62,40 @@ export async function runSetup(guild, opts = {}) {
   const me = guild.members.me;
   if (!me?.permissions.has(PermissionFlagsBits.ManageChannels) || !me?.permissions.has(PermissionFlagsBits.ManageRoles)) {
     throw new Error('I need **Manage Roles** and **Manage Channels** permissions to run setup.');
+  }
+
+  /* --------------------- 0. optional clean slate --------------------- */
+
+  if (clean) {
+    await guild.channels.fetch();
+
+    // Never delete the channel the command was run from, or anything Discord
+    // treats as structural (rules/updates channels on Community servers).
+    const protectedIds = new Set(
+      [opts.invokedChannelId, guild.rulesChannelId, guild.publicUpdatesChannelId, guild.safetyAlertsChannelId].filter(Boolean),
+    );
+
+    const doomed = [...guild.channels.cache.values()].filter((c) => c && !protectedIds.has(c.id));
+
+    // Children first so categories are empty when they go.
+    doomed.sort((a, b) => (a.type === ChannelType.GuildCategory ? 1 : 0) - (b.type === ChannelType.GuildCategory ? 1 : 0));
+
+    onProgress(`Deleting ${doomed.length} existing channel(s)…`);
+    for (const ch of doomed) {
+      if (dryRun) {
+        report.deleted.channels.push({ name: ch.name, id: ch.id });
+        continue;
+      }
+      try {
+        await ch.delete('OPB /setup clean rebuild');
+        report.deleted.channels.push({ name: ch.name, id: ch.id });
+      } catch (err) {
+        report.deleted.failed.push({ name: ch.name, error: err.message });
+      }
+    }
+    if (report.deleted.failed.length) {
+      report.warnings.push(`Could not delete ${report.deleted.failed.length} channel(s) — check my role position.`);
+    }
   }
 
   /* ----------------------------- 1. roles ---------------------------- */

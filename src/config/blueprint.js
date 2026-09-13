@@ -41,131 +41,146 @@ export function channelName(emoji, name, separator = DEFAULT_SEPARATOR, { lower 
  * Roles
  * ------------------------------------------------------------------ */
 
-/** Patron ladder: Patron -> Patron ++++ (5 tiers, ascending power). */
+/**
+ * Patron ladder: Patron -> Patron ++++ (5 tiers, ascending power).
+ *
+ * Tiers are earned by how many giveaways you have funded, not by a
+ * subscription price. `giveaways` is the threshold to reach each tier.
+ */
 export const PATRON_TIERS = [
   {
     key: 'patron1',
-    name: '💗 Patron',
+    name: '\u{1F497} Patron',
     tier: 1,
     color: 0xff8ac4,
-    price: '$3',
+    giveaways: 1,
+    requirement: '1 giveaway funded',
     entryBonus: 1,
     xpMultiplier: 1.1,
     perks: [
+      'Funded your first giveaway',
       'Patron-only chat + giveaway feed',
       '+1 bonus giveaway entry',
-      '1.1× chat XP',
-      'Patron role colour & hoisted above members',
+      '1.1\u00d7 chat XP',
     ],
   },
   {
     key: 'patron2',
-    name: '💖 Patron +',
+    name: '\u{1F496} Patron +',
     tier: 2,
     color: 0xff5fae,
-    price: '$5',
+    giveaways: 3,
+    requirement: '3 giveaways funded',
     entryBonus: 2,
-    xpMultiplier: 1.25,
+    xpMultiplier: 1.2,
     perks: [
       'Everything in Patron',
       '+2 bonus giveaway entries',
-      '1.25× chat XP',
+      '1.2\u00d7 chat XP',
       'Access to patron-only giveaways',
     ],
   },
   {
     key: 'patron3',
-    name: '💝 Patron ++',
+    name: '\u{1F49D} Patron ++',
     tier: 3,
     color: 0xeb459e,
-    price: '$10',
+    giveaways: 5,
+    requirement: '5 giveaways funded',
     entryBonus: 3,
-    xpMultiplier: 1.5,
+    xpMultiplier: 1.3,
     perks: [
       'Everything in Patron +',
       '+3 bonus giveaway entries',
-      '1.5× chat XP',
+      '1.3\u00d7 chat XP',
       'Priority support in the ticket queue',
     ],
   },
   {
     key: 'patron4',
-    name: '💜 Patron +++',
+    name: '\u{1F49C} Patron +++',
     tier: 4,
     color: 0xa855f7,
-    price: '$25',
+    giveaways: 10,
+    requirement: '10 giveaways funded',
     entryBonus: 5,
-    xpMultiplier: 1.75,
+    xpMultiplier: 1.4,
     perks: [
       'Everything in Patron ++',
       '+5 bonus giveaway entries',
-      '1.75× chat XP',
-      'Monthly patron-exclusive drop',
+      '1.4\u00d7 chat XP',
+      'A say in what we give away next',
     ],
   },
   {
     key: 'patron5',
-    name: '👑 Patron ++++',
+    name: '\u{1F451} Patron ++++',
     tier: 5,
     color: 0xffd700,
-    price: '$50',
+    giveaways: 20,
+    requirement: '20 giveaways funded',
     entryBonus: 8,
-    xpMultiplier: 2,
+    xpMultiplier: 1.5,
     perks: [
       'Everything in Patron +++',
       '+8 bonus giveaway entries (the hard cap)',
-      '2× chat XP',
-      'Name in the credits + a say in what we give away next',
+      '1.5\u00d7 chat XP',
+      'Name in the credits',
     ],
   },
 ];
 
-/** Chat reward ladder: 5 roles, each one a real buff. */
+/**
+ * Chat reward ladder: 5 roles, each one a real buff.
+ *
+ * Multipliers deliberately stay in a tight 1.1x - 1.5x band. The community is
+ * small, so a 2x rate would let one active chatter dominate every draw.
+ */
 export const CHAT_LEVEL_ROLES = [
   {
     key: 'chat5',
-    name: '🗨️ Chat Lvl 5',
+    name: '\u{1F5E8}\uFE0F Chat Lvl 5',
     level: 5,
     color: 0x95e1d3,
     entryBonus: 1,
-    xpMultiplier: 1.05,
-    perks: ['+1 giveaway entry', '1.05× XP', 'Embed links & external emoji in chat'],
+    xpMultiplier: 1.1,
+    perks: ['+1 giveaway entry', '1.1\u00d7 XP', 'Embed links & external emoji in chat'],
   },
   {
     key: 'chat10',
-    name: '💬 Chat Lvl 10',
+    name: '\u{1F4AC} Chat Lvl 10',
     level: 10,
     color: 0x4ecdc4,
     entryBonus: 2,
-    xpMultiplier: 1.1,
-    perks: ['+2 giveaway entries', '1.1× XP', 'Attach files in media & memes'],
+    xpMultiplier: 1.2,
+    perks: ['+2 giveaway entries', '1.2\u00d7 XP', 'Attach files in media & memes'],
   },
   {
     key: 'chat25',
-    name: '🔊 Chat Lvl 25',
+    name: '\u{1F50A} Chat Lvl 25',
     level: 25,
     color: 0x1abc9c,
     entryBonus: 3,
-    xpMultiplier: 1.2,
-    perks: ['+3 giveaway entries', '1.2× XP', 'Create threads + use the soundboard'],
+    xpMultiplier: 1.3,
+    perks: ['+3 giveaway entries', '1.3\u00d7 XP', 'Create threads + use the soundboard'],
   },
   {
     key: 'chat50',
-    name: '🔥 Chat Lvl 50',
+    name: '\u{1F525} Chat Lvl 50',
     level: 50,
     color: 0xff9f1c,
     entryBonus: 5,
-    xpMultiplier: 1.35,
-    perks: ['+5 giveaway entries', '1.35× XP', 'Hoisted in the member list'],
+    xpMultiplier: 1.4,
+    perks: ['+5 giveaway entries', '1.4\u00d7 XP', 'Hoisted in the member list'],
   },
   {
     key: 'chat100',
-    name: '🌟 Chat Lvl 100',
+    name: '\u{1F31F} Chat Lvl 100',
     level: 100,
     color: 0xff6b6b,
     entryBonus: 8,
     xpMultiplier: 1.5,
-    perks: ['+8 giveaway entries', '1.5× XP', 'Change your own nickname + veteran flex'],
+    perks: ['+8 giveaway entries', '1.5\u00d7 XP', 'Change your own nickname + veteran flex'],
   },
 ];
 
@@ -243,7 +258,7 @@ export const ROLES = [
     permissions: [],
     group: 'patron',
     tier: t.tier,
-    description: `Patreon tier ${t.tier} (${t.price}/mo) - +${t.entryBonus} entries, ${t.xpMultiplier}× XP.`,
+    description: `Patron tier ${t.tier} (${t.requirement}) - +${t.entryBonus} entries, ${t.xpMultiplier}× XP.`,
   })),
   ...CHAT_LEVEL_ROLES.map((c) => ({
     key: c.key,
@@ -371,31 +386,6 @@ export const CATEGORIES = [
     ],
   },
   {
-    key: 'community',
-    name: '💬 COMMUNITY',
-    overwrites: PUBLIC_TALK,
-    channels: [
-      { key: 'general', emoji: '💬', name: 'general', type: 'text', topic: 'Main chat. Chat XP is earned here.', slowmode: 3 },
-      { key: 'media', emoji: '🖼️', name: 'media', type: 'text', topic: 'Screenshots, clips and photos. Images only.', slowmode: 5 },
-      { key: 'memes', emoji: '😂', name: 'memes', type: 'text', topic: 'Post your best. Reposts get you clowned.', slowmode: 5 },
-      { key: 'botCommands', emoji: '🤖', name: 'bot-commands', type: 'text', topic: 'Spam /rank and /leaderboard in here.' },
-      { key: 'counting', emoji: '🔢', name: 'counting', type: 'text', topic: "Don't break the chain." },
-    ],
-  },
-  {
-    key: 'voice',
-    name: '🔊 VOICE CHANNELS',
-    overwrites: {
-      '@everyone': { allow: ['ViewChannel', 'Connect', 'Speak', 'Stream', 'UseVAD'] },
-      muted: { deny: ['Speak', 'Stream'] },
-    },
-    channels: [
-      { key: 'vcGeneral', emoji: '🔊', name: 'General VC', type: 'voice', preserveCase: true, userLimit: 0 },
-      { key: 'vcGaming', emoji: '🎮', name: 'Gaming VC', type: 'voice', preserveCase: true, userLimit: 10 },
-      { key: 'vcChill', emoji: '🎵', name: 'Chill VC', type: 'voice', preserveCase: true, userLimit: 5 },
-    ],
-  },
-  {
     key: 'opb',
     name: '🎁 OPB GIVEAWAYS',
     overwrites: READ_ONLY,
@@ -467,6 +457,18 @@ export const CATEGORIES = [
     ],
   },
   {
+    key: 'community',
+    name: '💬 COMMUNITY',
+    overwrites: PUBLIC_TALK,
+    channels: [
+      { key: 'general', emoji: '💬', name: 'general', type: 'text', topic: 'Main chat. Chat XP is earned here.', slowmode: 3 },
+      { key: 'media', emoji: '🖼️', name: 'media', type: 'text', topic: 'Screenshots, clips and photos. Images only.', slowmode: 5 },
+      { key: 'memes', emoji: '😂', name: 'memes', type: 'text', topic: 'Post your best. Reposts get you clowned.', slowmode: 5 },
+      { key: 'botCommands', emoji: '🤖', name: 'bot-commands', type: 'text', topic: 'Spam /rank and /leaderboard in here.' },
+      { key: 'counting', emoji: '🔢', name: 'counting', type: 'text', topic: "Don't break the chain." },
+    ],
+  },
+  {
     key: 'staff',
     name: '🛡️ STAFF',
     overwrites: STAFF_ONLY,
@@ -477,6 +479,19 @@ export const CATEGORIES = [
       { key: 'modLogs', emoji: '📝', name: 'mod-logs', type: 'text', topic: 'Moderation audit log.' },
       { key: 'botLogs', emoji: '🤖', name: 'bot-logs', type: 'text', topic: 'OPB Giveaways bot diagnostics.' },
       { key: 'vcStaff', emoji: '🔒', name: 'Staff VC', type: 'voice', preserveCase: true, overwrites: STAFF_ONLY },
+    ],
+  },
+  {
+    key: 'voice',
+    name: '🔊 VOICE CHANNELS',
+    overwrites: {
+      '@everyone': { allow: ['ViewChannel', 'Connect', 'Speak', 'Stream', 'UseVAD'] },
+      muted: { deny: ['Speak', 'Stream'] },
+    },
+    channels: [
+      { key: 'vcGeneral', emoji: '🔊', name: 'General VC', type: 'voice', preserveCase: true, userLimit: 0 },
+      { key: 'vcGaming', emoji: '🎮', name: 'Gaming VC', type: 'voice', preserveCase: true, userLimit: 10 },
+      { key: 'vcChill', emoji: '🎵', name: 'Chill VC', type: 'voice', preserveCase: true, userLimit: 5 },
     ],
   },
 ];

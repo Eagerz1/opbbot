@@ -281,3 +281,117 @@ test('level curve is monotonic and round-trips', () => {
     last = need;
   }
 });
+
+/* --------------------- clean rebuild + ordering ---------------------- */
+
+test('setup with clean:true deletes existing channels before building', async () => {
+  const guild = new MockGuild();
+  const junk = await guild.channels.create({ name: 'old-random-channel', type: ChannelType.GuildText });
+  const junkCat = await guild.channels.create({ name: 'OLD CATEGORY', type: ChannelType.GuildCategory });
+  assert.ok(guild.channelsCache.has(junk.id));
+
+  const report = await runSetup(guild, { clean: true, postPanels: false });
+
+  assert.ok(report.deleted.channels.length >= 2, 'old channels were deleted');
+  assert.equal(guild.channelsCache.has(junk.id), false, 'junk text channel is gone');
+  assert.equal(guild.channelsCache.has(junkCat.id), false, 'junk category is gone');
+
+  const plan = countPlan();
+  assert.equal(report.channels.created.length, plan.channels, 'everything rebuilt from scratch');
+  assert.equal(report.channels.adopted.length, 0, 'nothing adopted after a clean');
+});
+
+test('clean:true never deletes the channel the command was run from', async () => {
+  const guild = new MockGuild();
+  const home = await guild.channels.create({ name: 'command-here', type: ChannelType.GuildText });
+
+  const report = await runSetup(guild, { clean: true, invokedChannelId: home.id, postPanels: false });
+
+  assert.ok(guild.channelsCache.has(home.id), 'invoking channel survived');
+  assert.ok(!report.deleted.channels.some((c) => c.id === home.id));
+});
+
+test('clean:false leaves unrelated channels alone', async () => {
+  const guild = new MockGuild();
+  const keep = await guild.channels.create({ name: 'keep-me', type: ChannelType.GuildText });
+
+  const report = await runSetup(guild, { postPanels: false });
+
+  assert.ok(guild.channelsCache.has(keep.id), 'unrelated channel untouched');
+  assert.equal(report.deleted.channels.length, 0);
+});
+
+test('categories are ordered info first, voice last', async () => {
+  const names = CATEGORIES.map((c) => c.key);
+  assert.equal(names[0], 'information', 'information is first');
+  assert.equal(names.at(-1), 'voice', 'voice is last');
+  assert.ok(names.indexOf('opb') < names.indexOf('community'), 'giveaways sit above community');
+});
+
+test('a general text channel exists in the community category', async () => {
+  const community = CATEGORIES.find((c) => c.key === 'community');
+  const general = community.channels.find((c) => c.key === 'general');
+  assert.ok(general, 'general channel is in the blueprint');
+  assert.equal(general.type, 'text');
+});
+
+test('three voice channels sit in the voice category at the bottom', async () => {
+  const voice = CATEGORIES.at(-1);
+  assert.equal(voice.key, 'voice');
+  assert.equal(voice.channels.filter((c) => c.type === 'voice').length, 3);
+});
+
+/* ------------------------- reward balance ---------------------------- */
+
+test('patron tiers are earned by giveaways funded, ascending', async () => {
+  const counts = PATRON_TIERS.map((t) => t.giveaways);
+  assert.deepEqual(counts, [1, 3, 5, 10, 20]);
+  for (let i = 1; i < counts.length; i++) assert.ok(counts[i] > counts[i - 1], 'thresholds ascend');
+  for (const t of PATRON_TIERS) assert.ok(t.requirement.includes('funded'), `${t.name} states the requirement`);
+});
+
+test('every xp multiplier sits between 1.1x and 1.5x', async () => {
+  for (const t of [...PATRON_TIERS, ...CHAT_LEVEL_ROLES]) {
+    assert.ok(t.xpMultiplier >= 1.1, `${t.name} is at least 1.1x`);
+    assert.ok(t.xpMultiplier <= 1.5, `${t.name} is at most 1.5x — a small community cannot absorb more`);
+  }
+});
+
+test('chat multipliers step 1.1 -> 1.5 across the five levels', async () => {
+  assert.deepEqual(
+    CHAT_LEVEL_ROLES.map((c) => c.xpMultiplier),
+    [1.1, 1.2, 1.3, 1.4, 1.5],
+  );
+});
+
+test('stacked multipliers stay well under 3x', async () => {
+  const worst = PATRON_TIERS.at(-1).xpMultiplier * CHAT_LEVEL_ROLES.at(-1).xpMultiplier;
+  assert.ok(worst <= 2.25, `stacked max is ${worst}x`);
+});
+
+/* ----------------------------- embeds -------------------------------- */
+
+test('roles panel puts mentions in the description, not field names', async () => {
+  const { rolesPanelEmbed } = await import('../src/lib/embeds.js');
+  const embed = rolesPanelEmbed({
+    roles: { giveawayPing: '111', member: '222', giveawayFunder: '333' },
+    channels: { createGiveaway: '444' },
+  });
+  const json = embed.toJSON();
+
+  // Discord renders <@&id> in a description but NOT in a field name.
+  for (const id of ['111', '222', '333']) {
+    assert.ok(json.description.includes(`<@&${id}>`), `mention ${id} is in the description`);
+  }
+  for (const f of json.fields ?? []) {
+    assert.ok(!/<@&\d+>/.test(f.name), `field name must not contain a raw mention: ${f.name}`);
+  }
+});
+
+test('patreon embed shows the giveaway requirement, not a price', async () => {
+  const { patreonEmbed } = await import('../src/lib/embeds.js');
+  const json = patreonEmbed({ roles: {}, channels: {} }).toJSON();
+  const text = JSON.stringify(json);
+  assert.ok(!/\$\d+\s*\/\s*mo/.test(text), 'no monthly price remains');
+  assert.ok(text.includes('funded'), 'states giveaways funded');
+});
